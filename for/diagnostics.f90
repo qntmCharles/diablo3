@@ -121,8 +121,8 @@ subroutine save_stats_chan(movie,final)
 
   shear = shear / float(Nx * Nz)
 
-  gname = 'shear2_zstar'
-  call Bin_Ystar_and_Write(gname, f1)
+  !gname = 'shear2_zstar'
+  !call Bin_Ystar_and_Write(gname, f1)
 
 
 
@@ -325,8 +325,8 @@ subroutine save_stats_chan(movie,final)
       call reduce_and_write_XYplane(fname, gname, vvar_xy, .false., movie)
     end if
 
-    gname = 'thw_zstar'
-    call Bin_Ystar_and_Write(gname, f1)
+    !gname = 'thw_zstar'
+    !call Bin_Ystar_and_Write(gname, f1)
 
 
 
@@ -378,30 +378,30 @@ subroutine save_stats_chan(movie,final)
       call reduce_and_write_XYplane(fname, gname, vvar_xy, .false., movie)
     end if
 
-    gname = 'chi_zstar'
-    call Bin_Ystar_and_Write(gname, r1)
+    !gname = 'chi_zstar'
+    !call Bin_Ystar_and_Write(gname, r1)
 
 
 
-    if (n == 1) then
-      call compute_BPE
+    !if (n == 1) then
+      !call compute_BPE
 
       !!! Compute integrated y*u1 at the left boundary !!!
-      do j = 1, Nyp
-        u1y_left(j) = 0.d0
-        do k = 0, Nzp - 1
-          u1y_left(j) = u1y_left(j) + gyf(j) * u1(0, k, j)
-        end do
-      end do
-      call mpi_allreduce(mpi_in_place, u1y_left, (Nyp + 2), &
-                         mpi_double_precision, mpi_sum, mpi_comm_z, ierror)
+      !do j = 1, Nyp
+        !u1y_left(j) = 0.d0
+        !do k = 0, Nzp - 1
+          !u1y_left(j) = u1y_left(j) + gyf(j) * u1(0, k, j)
+        !end do
+      !end do
+      !call mpi_allreduce(mpi_in_place, u1y_left, (Nyp + 2), &
+                         !mpi_double_precision, mpi_sum, mpi_comm_z, ierror)
 
-      u1y_left = u1y_left / float(Nz)
-      if (rankZ == 0) then
-        call integrate_y_var(u1y_left, u1y_left_b)
-      end if
+      !u1y_left = u1y_left / float(Nz)
+      !if (rankZ == 0) then
+        !call integrate_y_var(u1y_left, u1y_left_b)
+      !end if
 
-    end if
+    !end if
 
 
 
@@ -1033,8 +1033,8 @@ subroutine compute_TKE_diss(movie)
     call WriteStatH5_Y(fname, gname, Diag)
   end if
 
-  gname = 'epsilon_zstar'
-  call Bin_Ystar_and_Write(gname, f1)
+  !gname = 'epsilon_zstar'
+  !call Bin_Ystar_and_Write(gname, f1)
 
 
   if (movie) then
@@ -1348,12 +1348,12 @@ subroutine compute_TKE(movie)
   end if
 
 
-  gname = 'TKE_zstar'
-  call Bin_Ystar_and_Write(gname, f1)
+  !gname = 'TKE_zstar'
+  !call Bin_Ystar_and_Write(gname, f1)
 
-  f1 = 0.5d0 * (u1**2. + u2**2. + u3**2.)
-  gname = 'KE_zstar'
-  call Bin_Ystar_and_Write(gname, f1)
+  !f1 = 0.5d0 * (u1**2. + u2**2. + u3**2.)
+  !gname = 'KE_zstar'
+  !call Bin_Ystar_and_Write(gname, f1)
 
 
 
