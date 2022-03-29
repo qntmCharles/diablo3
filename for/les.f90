@@ -1507,7 +1507,7 @@ end
   deltax = (dx(1) * beta_sgs)
   deltaz = (dz(1) * beta_sgs)
 
-  do j = 0, Nyp + 1 ! Need j = 0 for saving stats
+  do j = 0, Nyp ! Need j = 0 for saving stats
     ! Set filter length (based on grid size) in y direction
     ! Based on constant Smag code
     deltay = (dyf(j)*2.d0)
