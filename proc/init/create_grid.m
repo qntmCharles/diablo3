@@ -22,9 +22,9 @@
  N = input('Enter the grid size, NZ (this should match NZ in grid_def.all): ');
 
 % Enter the domain size unless we are reading the grid
- Lz = 1 %input('Enter the domain size: ');
+ Lz = input('Enter the domain size: ');
 % Select the stretching parameter
- CS = 1.5 %input('Enter the stretching parameter, CS (e.g. 1.75): ');
+ CS = input('Enter the stretching parameter, CS (e.g. 1.75): ');
 
 if (GRID_TYPE==1) 
   % Closed Channel
