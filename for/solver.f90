@@ -28,6 +28,72 @@
 
     ! call slip_vel
 
+    integer i, j, k, n
+
+    ! define variables
+    real(rkind) rnum1, tau_sponge
+    real(rkind) w_m(0 : Ny + 1), r_m(0 : Ny + 1), b_m(0 : Ny + 1)
+
+    !radius, buoyancy and vertical profiles in vertical
+    do j=2, Nyp+1
+      r_m(j) = 1.2d0 * alpha_e * (gy(j)-zvirt)
+      w_m(j) = (0.9d0 * alpha_e * F0)**(1.d0/3.d0) * &
+                  (gy(j)-zvirt)**(2.d0/3.d0) / r_m(j)
+      b_m(j) = F0 / (r_m(j) * r_m(j) * w_m(j))
+    end do
+
+    ! maybe modify forcing timescale if unstable
+    tau_sponge = 2.5d0
+
+    ! create damping function for vertical velocity
+    do j=2, Nyp
+      do k=0, Nzp-1
+        do i=0, Nxm1
+          call random_number(rnum1)
+          s1(i,k,j) = (u2(i,k,j) - w_m(j) * &
+            exp(-((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp + k)-Lz/2.d0)**2.d0) / &
+            (2.d0*r_m(j)**2.d0)) * &
+            (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
+            (1.d0 - tanh((gy(j)-Lyc)/Lyp))/2.d0
+        end do
+      end do
+    end do
+
+    call fft_xz_to_fourier(s1, cs1)
+
+    do j=2, Nyp
+      do k=0, twoNkz
+        do i=0, Nxp-1
+          cf2(i,k,j) = cf2(i,k,j) - cs1(i,k,j)/tau_sponge
+        end do
+      end do
+    end do
+
+    ! create damping function for buoyancy
+    n = 1
+    do j=jstart_th(n), jend_th(n)
+      do k=0, Nzp-1
+        do i=0, Nxm1
+          call random_number(rnum1)
+          s1(i,k,j) = (th(i,k,j,n) - b_m(j) * & 
+            exp(-((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0) / &
+            (2.d0*r_m(j)**2.d0)) * &
+            (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
+            (1.d0 - tanh((gy(j)-Lyc)/Lyp))/2.d0
+        end do
+      end do
+    end do
+
+    call fft_xz_to_fourier(s1, cs1)
+
+    do j=jstart_th(n), jend_th(n)
+      do k=0, twoNkz
+        do i=0, Nxp-1
+          cfth(i,k,j,n) = cfth(i,k,j,n) - cs1(i,k,j)/tau_sponge
+        end do
+      end do
+    end do
+
     return
  end
 
@@ -374,7 +440,7 @@ subroutine rk_chan_1
 
 
   integer i, j, k, n, istart
-  real(rkind) temp1, temp2, temp3, temp4, temp5, ubulk
+  real(rkind) temp1, temp2, temp3, temp4, temp5, ubulk, rnum
   real(rkind), dimension(0:Nx-1,0:Nyp+1) ::   matl,   matd,   matu, vec
   real(rkind), dimension(0:Nxp,0:Nyp+1) ::    matl_c, matd_c, matu_c
   complex(rkind), dimension(0:Nxp,0:Nyp+1) :: vec_c
@@ -1249,6 +1315,22 @@ subroutine rk_chan_1
   call fft_xz_to_fourier(u3, cu3)
   do n = 1, N_th
     call fft_xz_to_fourier(th(:, :, :, n), cth(:, :, :, n))
+  end do
+
+  ! Initiate turbulence with a 1% perturbation to velocity in two grid layers
+  ! above forcing region
+
+  do k = 0, Nzp-1
+    do i = 0, Nxm1 
+      call random_number(rnum)
+      u1(i,k,jpert) = u1(i,k,jpert)*(1.d0 + 2.d0*(rnum-0.5d0)/100.d0)
+      u2(i,k,jpert) = u2(i,k,jpert)*(1.d0 + 2.d0*(rnum-0.5d0)/100.d0)
+      u3(i,k,jpert) = u3(i,k,jpert)*(1.d0 + 2.d0*(rnum-0.5d0)/100.d0)
+      call random_number(rnum)
+      u1(i,k,jpert+1) = u1(i,k,jpert+1)*(1.d0 + 2.d0*(rnum-0.5d0)/100.d0)
+      u2(i,k,jpert+1) = u2(i,k,jpert+1)*(1.d0 + 2.d0*(rnum-0.5d0)/100.d0)
+      u3(i,k,jpert+1) = u3(i,k,jpert+1)*(1.d0 + 2.d0*(rnum-0.5d0)/100.d0)
+    end do
   end do
 
   ! Begin second step of the Fractional Step algorithm, making u divergence free

@@ -1,0 +1,31 @@
+#!/bin/bash
+#SBATCH -J diablo3
+#SBATCH -p cosmosx
+#SBATCH -N 1
+#SBATCH --ntasks-per-node=16
+#SBATCH --time=12:00:00
+
+ulimit -s unlimited
+
+JOBID=$SLURM_JOB_ID
+echo -e "JobID: $JOBID\n======"
+echo "Time: `date`"
+echo "Running on master node: `hostname`"
+echo "Current directory: `pwd`"
+
+# Recompile, in case architecture has changed
+./setup_run 2 8
+
+# Prepare for Restart (Maybe)
+rm stop.now
+mv end.h5 start.h5
+
+# Determine new output name
+name=output
+i=1
+while [[ -e $name$i.dat || -L $name$i.dat ]] ; do
+  let i++
+done
+name=$name$i
+
+mpiexec "$SLURM_SUBMIT_DIR/diablo" &>"${name}.dat"

@@ -328,7 +328,7 @@ contains
           end do
         end do
       end do
-    else if (IC_type == 4) then
+    else if (IC_type == 4 .or. IC_type == 9) then
       ! Infinite Front
       do j = 0, Nyp
         do k = 0, Nzp - 1
@@ -646,6 +646,15 @@ contains
               end do
             end do
           end do
+        else if (IC_TYPE == 9) then
+        ! Quiescent IC
+        do k = 0, Nzp - 1
+          do i = 0, Nxm1
+            do j = 1, Nyp
+              th(i, k, j, n) = 0.d0
+            end do
+          end do
+        end do
         else
           write (*, '("Warning, unsupported IC_type in create_flow.")')
         end if
@@ -768,7 +777,7 @@ subroutine courant
   end if
   ! Make sure that we capture the buoyancy period (for stratified flows)
   do n = 1, N_th
-    Nmax = sqrt(abs(th_BC_Ymin_c1(n)))
+    Nmax = sqrt(abs(th_BC_Ymax_c1(n)))
     dt = min(dt, 0.1 * 2.d0 * pi / Nmax)
   end do
 

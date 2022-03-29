@@ -1,0 +1,10 @@
+#!/bin/bash
+
+rm *.h5
+cp grid/grid.h5 .
+
+rm slurm-*
+rm output*
+rm diablo
+
+echo "Directory cleared"

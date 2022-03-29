@@ -64,7 +64,12 @@ module parameters
   integer  time_ad_meth
   integer les_model_type
 
+  ! Plume parameters
+  real(rkind) R0, alpha_e, LYC, LYP, Q0, F0, zvirt
+  integer JPERT
 
+  ! Timestep memory
+  real(rkind) TIME_LAST
 
 
 
@@ -87,7 +92,7 @@ contains
     !   (Note - if you change the following section of code, update the
     !    CURRENT_VERSION number to make obsolete previous input files !)
 
-    current_version = 3.4
+    current_version = 3.5
     read (11, *)
     read (11, *)
     read (11, *)
@@ -154,6 +159,12 @@ contains
       stop 'Error: Cavity not implemented!'
     end if
 
+    ! Now plume variables read, set perturbation level
+    JPERT = 0
+    do while (gy(JPERT) < Lyc+Lyp)
+      JPERT = JPERT + 1
+    end do
+
     if (rank == 0) &
       write (*, '("Use LES: " L1)') use_LES
 
@@ -202,7 +213,7 @@ contains
     open (11, file='input_chan.dat', form='formatted', status='old')
     ! Read input file.
 
-    current_version = 3.4
+    current_version = 3.5
     read (11, *)
     read (11, *)
     read (11, *)
@@ -228,6 +239,10 @@ contains
     read (11, *)
     read (11, *) f_type, ubulk0, px0, omega0, amp_omega0, force_start
     read (11, *)
+    read (11, *) r0, alpha_e, Q0
+    read (11, *)
+    read (11, *) Lyc, Lyp
+    read (11, *)
     read (11, *)
     read (11, *) u_BC_Ymin, u_BC_Ymin_c1
     read (11, *)
@@ -250,6 +265,9 @@ contains
     end do
 
     if (rank == 0) write (*, '("Ro Inverse = " ES26.18)') Ro_inv
+
+    zvirt = -r0/(1.2d0 * alpha_e)
+    F0 = 4.d0*atan(1.d0) * (r0**2.d0) * Q0
 
 
     ! Compensate no-slip BC in the GS flow direction due to dTHdx
