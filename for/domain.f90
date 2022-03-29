@@ -389,16 +389,17 @@ contains
     rankzMovie = int(NzMovie / Nzp)
     NzMovie = NzMovie - rankzMovie * Nzp
 
-    rankyMovie = -1
-    if (gyf(jstart) <= YcMovie .and. gyf(jend + 1) > YcMovie) then
-      rankyMovie = rankY
-      i = 1
-      do while (.not. &
-                (gyf(i) <= YcMovie .and. gyf(i + 1) > YcMovie))
-        i = i + 1
-      end do
-      NyMovie = i;
-    end if
+    !rankyMovie = -1
+    !if (gyf(jstart) <= YcMovie .and. gyf(jend + 1) > YcMovie) then
+      !rankyMovie = rankY
+      !i = 1
+      !do while (.not. &
+                !(gyf(i) <= YcMovie .and. gyf(i + 1) > YcMovie))
+        !i = i + 1
+      !end do
+      !NyMovie = i;
+    !end if
+    NyMovie = 1
 
     if (rankY == rankyMovie .and. rankZ == rankzMovie) then
       write (*, '("Movie Parameters")')
