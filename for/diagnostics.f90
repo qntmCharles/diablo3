@@ -378,9 +378,115 @@ subroutine save_stats_chan(movie,final)
       call reduce_and_write_XYplane(fname, gname, vvar_xy, .false., movie)
     end if
 
+    !!! For plume calculations, want variables on GXF, GYF, GZF grid to reduce loss of domain at centreline
+
+    ! Interpolate vertical velocity onto the GYF grid
+    do j = 1, Nyp
+      do k = 0, Nzp - 1
+        do i = 0, Nxm1
+          s1(i, k, j) = 0.5 * (u2(i, k, j) + u2(i, k, j + 1))
+        end do
+      end do
+    end do
+    ! Now interpolate onto GXF, GZF grid
+    do j = 1, Nyp
+      do k = 0, Nzp - 1
+        do i = 0, Nxm1
+          s2(i, k, j) = 0.25 * (s1(i, k, j) + s1(i+1, k, j) + s1(i, k+1, j) + s1(i+1, k+1, j))
+        end do
+      end do
+    end do
+
+    ! Interpolate horizontal x-velocity onto GXF, GZF grid
+    do j = 1, Nyp
+      do k = 0, Nzp - 1
+        do i = 0, Nxm1
+          s1(i, k, j) = 0.25 * (u1(i, k, j) + u1(i+1, k, j) + u1(i, k+1, j) + u1(i+1, k+1, j))
+        end do
+      end do
+    end do
+
+    ! Interpolate horizontal x-velocity onto GXF, GZF grid
+    do j = 1, Nyp
+      do k = 0, Nzp - 1
+        do i = 0, Nxm1
+          s3(i, k, j) = 0.25 * (u3(i, k, j) + u3(i+1, k, j) + u3(i, k+1, j) + u3(i+1, k+1, j))
+        end do
+      end do
+    end do
+
+    ! Interpolate buoyancy onto GXF, GZF grid
+    do j = 1, Nyp
+      do k = 0, Nzp - 1
+        do i = 0, Nxm1
+          s4(i, k, j) = 0.25 * (th(i, k, j, 1) + th(i+1, k, j, 1) + th(i, k+1, j, 1) + th(i+1, k+1, j, 1))
+        end do
+      end do
+    end do
+
+
+    !!! Compute radial and azimuthal velocity !!!
+    ! Store u_r in r1 and u_theta in r2
+    do j = 1, Nyp
+      do k = 0, Nzp - 1
+        do i = 0, Nxm1
+            ur(i, k, j) =  ( (gxf(i) - LX/2.d0) * s1(i, k, j) + (gzf(rankZ*Nzp+k) - LZ/2.d0) * s3(i, k, j) ) / &
+                    sqrt( (gxf(i) - LX/2.d0)**2.d0 + (gzf(rankZ*Nzp+k) - LZ/2.d0)**2.d0 )
+            utheta(i, k, j) =  ( (gx(i) - LX/2.d0) * s3(i, k, j) - (gz(rankZ*Nzp+k) - LZ/2.d0) * s1(i, k, j) ) / &
+                    sqrt( (gxf(i) - LX/2.d0)**2.d0 + (gzf(rankZ*Nzp+k) - LZ/2.d0)**2.d0 )
+        end do
+      end do
+    end do
+
+    !!! Compute azimuthal averages !!!
+
+    gname = 'b_az'
+    call compute_azavg_and_sfluc(gname, s4, b_sfluc)
+
+    gname = 'u_az'
+    call compute_azavg_and_sfluc(gname, ur, u_sfluc)
+
+    gname = 'v_az'
+    call compute_azavg_and_sfluc(gname, utheta, u_sfluc)
+
+    gname = 'w_az'
+    call compute_azavg_and_sfluc(gname, s2, w_sfluc)
+
+    gname = 'p_az'
+    call compute_azavg(gname, p)
+
+    !!! Compute spatial covariances !!!
+    gname = 'uu_sfluc'
+    call compute_azavg(gname, u_sfluc * u_sfluc)
+
+    gname = 'uv_sfluc'
+    call compute_azavg(gname, u_sfluc * v_sfluc)
+
+    gname = 'uw_sfluc'
+    call compute_azavg(gname, u_sfluc * w_sfluc)
+
+    gname = 'ub_sfluc'
+    call compute_azavg(gname, u_sfluc * b_sfluc)
+
+    gname = 'vv_sfluc'
+    call compute_azavg(gname, v_sfluc * v_sfluc)
+
+    gname = 'vw_sfluc'
+    call compute_azavg(gname, v_sfluc * w_sfluc)
+
+    gname = 'ww_sfluc'
+    call compute_azavg(gname, w_sfluc * w_sfluc)
+
+    gname = 'wb_sfluc'
+    call compute_azavg(gname, w_sfluc * b_sfluc)
+
+    gname = 'bb_sfluc'
+    call compute_azavg(gname, b_sfluc * b_sfluc)
+
+
+
     !gname = 'chi_zstar'
     !call Bin_Ystar_and_Write(gname, r1)
-
 
 
     !if (n == 1) then
@@ -1726,8 +1832,145 @@ subroutine compute_Vorticity(movie)
 
 end
 
+!----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+subroutine compute_azavg_and_sfluc(gname, field, flucfield)
+  !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+  ! Compute the azimuthal average of field then spatial fluctuation
+  ! field already in Physical Space
+  ! CWP 2022
+
+  character(len=20) gname
+  real(rkind), intent(in) :: field(:,:,:)
+  real(rkind), intent(out) :: flucfield(:,:,:)
+
+  character(len=35) fname
+  integer i, j, k, bin
+  integer, parameter :: Nbin = Nx/2
+  real(rkind) field_binned(0:Nbin-1, 1:Nyp)
+  real(rkind) counts(0:Nbin-1, 1:Nyp)
+
+  ! Sum field by radius bin
+  field_binned = 0.d0
+  counts = 0.d0
+
+  do j = 1, Nyp
+    do k = 1, Nzp ! Why does 0, Nzp - 1 not work???
+      do i = 1, Nx ! Why does 0, Nxm1 not work???
+        ! Compute bin index
+        bin = int((sqrt((gxf(i)-Lx/2.d0)**2.d0 + (gzf(rankZ*Nzp+k)-Lz/2.d0)**2.d0)) * Nx/Lx)
+        
+        if (bin < Nbin) then
+          ! Add values to corresponding bin and increase count
+          counts(bin, j) = counts(bin, j) + 1.d0
+          field_binned(bin, j) = field_binned(bin, j) + field(i,k,j)
+        end if
+      end do
+    end do
+  end do
+
+  ! Collect results from all processors
+  call mpi_allreduce(mpi_in_place, field_binned, Nbin * Nyp, mpi_double_precision, &
+                     mpi_sum, mpi_comm_z, ierror)
+  call mpi_allreduce(mpi_in_place, counts, Nbin * Nyp, mpi_double_precision, &
+                     mpi_sum, mpi_comm_z, ierror)
+
+  ! Divide by counts to get average
+  do j = 1, Nyp
+    do i = 0, Nbin-1
+      if (counts(i,j) > 0) then
+        field_binned(i, j) = field_binned(i, j) / counts(i, j)
+      end if
+    end do
+  end do
+
+  call mpi_barrier(mpi_comm_z, ierror)
+
+  ! Write to file (how to make new file and write only half slices?)
+  fname = 'mean.h5'
+  if (rankZ == 0) then
+    call WriteHDF5_RYplane(fname, gname, field_binned)
+  end if
 
 
+  do j = 1, Nyp
+    do k = 1, Nzp ! Why does 0, Nzp - 1 not work???
+      do i = 1, Nx ! Why does 0, Nxm1 not work???
+        ! Compute bin index
+        bin = int((sqrt((gxf(i)-Lx/2.d0)**2.d0 + (gzf(rankZ*Nzp+k)-Lz/2.d0)**2.d0)) * Nx/Lx)
+
+        if (bin < Nbin) then
+          flucfield(i, k, j) = field(i, k, j) - field_binned(bin, j)
+        else
+          flucfield(i, k, j) = 0.d0
+        end if
+      end do
+    end do
+  end do
+
+  call mpi_allreduce(mpi_in_place, flucfield, Nx * Nzp * Nyp, mpi_double_precision, &
+                     mpi_sum, mpi_comm_z, ierror)
+
+end
+
+!----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+subroutine compute_azavg(gname, field)
+  !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+  ! Compute the azimuthal average of field
+  ! field already in Physical Space
+  ! CWP 2022
+
+  character(len=20) gname
+  real(rkind), intent(in) :: field(:,:,:)
+
+  character(len=35) fname
+  integer i, j, k, bin
+  integer, parameter :: Nbin = Nx/2
+  real(rkind) field_binned(0:Nbin-1, 1:Nyp)
+  real(rkind) counts(0:Nbin-1, 1:Nyp)
+
+  ! Sum field by radius bin
+  field_binned = 0.d0
+  counts = 0.d0
+
+  do j = 1, Nyp
+    do k = 1, Nzp ! Why does 0, Nzp - 1 not work???
+      do i = 1, Nx ! Why does 0, Nxm1 not work???
+        ! Compute bin index
+        bin = int(sqrt((gxf(i)-Lx/2.d0)**2.d0 + (gzf(rankZ*Nzp+k)-Lz/2.d0)**2.d0) * Nx/Lx)
+        
+        if (bin < Nbin) then
+          ! Add values to corresponding bin and increase count
+          counts(bin, j) = counts(bin, j) + 1.d0
+          field_binned(bin, j) = field_binned(bin, j) + field(i,k,j)
+        end if
+      end do
+    end do
+  end do
+
+  ! Collect results from all processors
+  call mpi_allreduce(mpi_in_place, field_binned, Nbin * Nyp, mpi_double_precision, &
+                     mpi_sum, mpi_comm_z, ierror)
+  call mpi_allreduce(mpi_in_place, counts, Nbin * Nyp, mpi_double_precision, &
+                     mpi_sum, mpi_comm_z, ierror)
+
+  ! Divide by counts to get average
+  do j = 1, Nyp
+    do i = 0, Nbin-1
+      if (counts(i,j) > 0) then
+        field_binned(i, j) = field_binned(i, j) / counts(i, j)
+      end if
+    end do
+  end do
+
+  call mpi_barrier(mpi_comm_z, ierror)
+
+  ! Write to file (how to make new file and write only half slices?)
+  fname = 'mean.h5'
+  if (rankZ == 0) then
+    call WriteHDF5_RYplane(fname, gname, field_binned)
+  end if
+
+end
 
 !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 subroutine compute_BPE

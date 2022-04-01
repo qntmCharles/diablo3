@@ -9,9 +9,9 @@ module flow
   ! Flow !
 
   ! 3D
-  real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1
+  real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1,s2,s3, s4
   complex(rkind), pointer, contiguous, dimension(:,:,:) :: cu1,cu2,cu3,cp,cr1,cr2,cr3, &
-                                                           cf1,cf2,cf3,cs1
+                                                           cf1,cf2,cf3,cs1,cs2,cs3,cs4
 
   ! 4D
   real(rkind), pointer, contiguous, dimension(:,:,:,:) :: th,fth,rth
@@ -79,6 +79,7 @@ module flow
 
   real(rkind) epsilon(0:Nyp+1), epsilon_m(0:Nyp+1)
 
+  real(rkind), dimension(0:Nx+1, 0:Nzp+1, 0:Nyp+1) :: ur, utheta, u_sfluc, v_sfluc, w_sfluc, b_sfluc
 
 
 
@@ -188,6 +189,9 @@ contains
     call alloc_array3D(f2,cf2)
     call alloc_array3D(f3,cf3)
     call alloc_array3D(s1,cs1)
+    call alloc_array3D(s2,cs2)
+    call alloc_array3D(s3,cs3)
+    call alloc_array3D(s4,cs4)
 
     call alloc_array4D(th, cth)   ! Not using the same memory!
     call alloc_array4D(fth,cfth)

@@ -256,6 +256,9 @@ contains
       if (verbosity > 3 .and. rank == 0) &
         write (*, *) 'GX(', i, ') = ', gx(i)
     end do
+    do i = 0, Nxm1
+     gxf(i) = 0.5d0 * (gx(i) + gx(i+1))
+    end do
     if (rank == 0) &
       write (*, '("Fourier in Y")')
     do k = 0, Nz
@@ -263,6 +266,9 @@ contains
       dz(k) = Lz / Nz
       if (rank == 0 .and. verbosity > 3) &
         write (*, *) 'GY(', k, ') = ', gz(k)
+    end do
+    do i = 0, Nzm1
+     gzf(i) = 0.5d0 * (gz(i) + gz(i+1))
     end do
     if (rank == 0) &
       write (*, '("Finite-difference in Z")')
