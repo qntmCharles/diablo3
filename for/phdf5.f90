@@ -512,6 +512,7 @@ subroutine WriteHDF5_RYplane(fname, gname, var2d)
     call h5fcreate_f(trim(fname), h5f_acc_trunc_f, &
                      file_id, Error, access_prp=plist_id_d)
     call h5fclose_f(file_id, Error)
+    ! TODO write attribute with current time
   end if
 
   ! Create the file collectively

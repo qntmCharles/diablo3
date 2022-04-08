@@ -1886,7 +1886,7 @@ subroutine compute_azavg_and_sfluc(gname, field, flucfield)
   call mpi_barrier(mpi_comm_z, ierror)
 
   ! Write to file (how to make new file and write only half slices?)
-  fname = 'mean.h5'
+  fname = 'az_stats.h5'
   if (rankZ == 0) then
     call WriteHDF5_RYplane(fname, gname, field_binned)
   end if
@@ -1965,7 +1965,7 @@ subroutine compute_azavg(gname, field)
   call mpi_barrier(mpi_comm_z, ierror)
 
   ! Write to file (how to make new file and write only half slices?)
-  fname = 'mean.h5'
+  fname = 'az_stats.h5'
   if (rankZ == 0) then
     call WriteHDF5_RYplane(fname, gname, field_binned)
   end if
