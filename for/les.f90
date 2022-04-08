@@ -1666,7 +1666,7 @@ end
 
   integer i, j, k, ij, n
 
-  do j = 0, Nyp + 1 ! Need j = 0 for saving stats
+  do j = 0, Nyp ! Need j = 0 for saving stats
     do k = 0, twoNkz
       do i = 0, Nxp - 1
 
