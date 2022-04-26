@@ -1507,7 +1507,7 @@ end
   deltax = (dx(1) * beta_sgs)
   deltaz = (dz(1) * beta_sgs)
 
-  do j = 0, Nyp ! Need j = 0 for saving stats
+  do j = 0, Nyp + 1 ! Need j = 0 for saving stats
     ! Set filter length (based on grid size) in y direction
     ! Based on constant Smag code
     deltay = (dyf(j)*2.d0)
@@ -1668,7 +1668,7 @@ end
 
   integer i, j, k, ij, n
 
-  do j = 0, Nyp ! Need j = 0 for saving stats
+  do j = 0, Nyp ! Need j = 0 for saving stats CWP 2022 REMOVED NYP+1
     do k = 0, twoNkz
       do i = 0, Nxp - 1
 
@@ -1681,6 +1681,8 @@ end
 
         Cdu3dx(i, k, j) = cikx(i) * cu3(i, k, j)
         Cdu3dz(i, k, j) = cikz(k) * cu3(i, k, j)
+
+        if (rankY == NprocY - 1) Cdu2dy(i, k, Nyp+1) = (cu2(i,k,0) - cu2(i,k,Nyp+1))/dyf(Nyp+1)
 
       end do
     end do
@@ -2428,7 +2430,7 @@ end
 
 
   integer i, j, k, n
-  complex(rkind), intent(inout) :: CS2(:,:,:) ! Can be CSij2 or CSIij2
+  complex(rkind), pointer, intent(inout) :: CS2(:,:,:) ! Can be CSij2 or CSIij2
 
   ! Define the arrays that will be used for data packing.  This makes the
   ! communication between processes more efficient by only requiring one
