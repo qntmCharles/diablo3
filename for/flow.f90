@@ -8,10 +8,14 @@ module flow
 
   ! Flow !
 
+  ! 2D 
+
   ! 3D
-  real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1,s2,s3, s4
-  complex(rkind), pointer, contiguous, dimension(:,:,:) :: cu1,cu2,cu3,cp,cr1,cr2,cr3, &
-                                                           cf1,cf2,cf3,cs1,cs2,cs3,cs4
+  real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1,s2,s3,s4,s5, &
+                                                           ur, utheta, u_sfluc, v_sfluc, w_sfluc, b_sfluc
+  complex(rkind), pointer, contiguous, dimension(:,:,:) :: cu1,cu2,cu3,cp,cr1,cr2,cr3,cf1,cf2,cf3, &
+                                                           cs1,cs2,cs3,cs4, cs5, cur, cutheta, cu_sfluc, cv_sfluc, &
+                                                           cw_sfluc, cb_sfluc
 
   ! 4D
   real(rkind), pointer, contiguous, dimension(:,:,:,:) :: th,fth,rth
@@ -78,9 +82,6 @@ module flow
   complex(rkind)  cuu1_yx(0:Nyp+1,0:Nxp-1)
 
   real(rkind) epsilon(0:Nyp+1), epsilon_m(0:Nyp+1)
-
-  real(rkind), dimension(0:Nx+1, 0:Nzp+1, 0:Nyp+1) :: ur, utheta, u_sfluc, v_sfluc, w_sfluc, b_sfluc
-
 
 
 
@@ -192,6 +193,15 @@ contains
     call alloc_array3D(s2,cs2)
     call alloc_array3D(s3,cs3)
     call alloc_array3D(s4,cs4)
+    call alloc_array3D(s5,cs5)
+
+    call alloc_array3D(ur,cur)
+    call alloc_array3D(utheta,cutheta)
+    call alloc_array3D(u_sfluc,cu_sfluc)
+    call alloc_array3D(v_sfluc,cv_sfluc)
+    call alloc_array3D(w_sfluc,cw_sfluc)
+    call alloc_array3D(b_sfluc,cb_sfluc)
+
 
     call alloc_array4D(th, cth)   ! Not using the same memory!
     call alloc_array4D(fth,cfth)
@@ -711,7 +721,7 @@ contains
     if (rank == 0) &
       write (*, '("Saving Output File")')
 
-    save_pressure = .false.
+    save_pressure = .true.
     if (final) then
       fname = 'end.h5'
       save_pressure = .true.

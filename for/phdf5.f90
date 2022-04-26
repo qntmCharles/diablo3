@@ -1296,6 +1296,53 @@ subroutine WriteHDF5(fname, save_pressure)
     call h5dclose_f(dset_id, Error)
   end do
 
+  !!! CWP 2022 output radial and tangential velocities !!!
+  call swapzy(ur, tmp)
+  dname = "UR"
+
+  call h5dcreate_f(gid, trim(dname), h5t_ieee_f64le, &
+                   filspace_id, dset_id, Error, dcpl_id=plist_id_d)
+
+  ! Select hyperslab in the file.
+  ! call h5dget_space_f(dsetur_id, selspace_id, Error)
+  call h5sselect_hyperslab_f(filspace_id, h5s_select_set_f, &
+                             offset, count, Error, stride, block)
+
+  call h5sselect_hyperslab_f(memspace_id, h5s_select_set_f, &
+                             offset_m, count, Error, stride, block)
+
+  ! Write the dataset collectively
+  call h5dwrite_f(dset_id, h5t_native_double, &
+                  tmp, &
+                  dimsm, Error, file_space_id=filspace_id, &
+                  mem_space_id=memspace_id, xfer_prp=plist_id_w)
+
+  ! Close dateset
+  call h5dclose_f(dset_id, Error)
+
+  call swapzy(utheta, tmp)
+  dname = "UTHETA"
+
+  call h5dcreate_f(gid, trim(dname), h5t_ieee_f64le, &
+                   filspace_id, dset_id, Error, dcpl_id=plist_id_d)
+
+  ! Select hyperslab in the file.
+  ! call h5dget_space_f(dsetur_id, selspace_id, Error)
+  call h5sselect_hyperslab_f(filspace_id, h5s_select_set_f, &
+                             offset, count, Error, stride, block)
+
+  call h5sselect_hyperslab_f(memspace_id, h5s_select_set_f, &
+                             offset_m, count, Error, stride, block)
+
+  ! Write the dataset collectively
+  call h5dwrite_f(dset_id, h5t_native_double, &
+                  tmp, &
+                  dimsm, Error, file_space_id=filspace_id, &
+                  mem_space_id=memspace_id, xfer_prp=plist_id_w)
+
+  ! Close dateset
+  call h5dclose_f(dset_id, Error)
+
   ! If want to use this as a checkpoint file...
   if (save_pressure) then
     call fft_xz_to_physical(cp, p)

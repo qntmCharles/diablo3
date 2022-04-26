@@ -5,7 +5,7 @@ subroutine save_stats_chan(movie,final)
   ! Computes domain-integrated and horizontally-integrated (X-Z) stats
 
   character(len=35) fname
-  character(len=20) gname
+  character(len=20) gname, gnamef
   logical movie,final
   integer i, j, k, n
 
@@ -380,108 +380,110 @@ subroutine save_stats_chan(movie,final)
 
     !!! For plume calculations, want variables on GXF, GYF, GZF grid to reduce loss of domain at centreline
 
-    ! Interpolate vertical velocity onto the GYF grid
+    ! Interpolate vertical velocity onto vertical fractional grid
+    call g2gf(u2)
+
+    ! Convert to Fourier space
+    call fft_xz_to_fourier(u1, cu1)
+    call fft_xz_to_fourier(u2, cu2)
+    call fft_xz_to_fourier(u3, cu3)
+    call fft_xz_to_fourier(th(:, :, :, 1), cth(:, :, :, 1))
+    ! p already in Fourier space
+
+    ! Apply phase shift
     do j = 1, Nyp
-      do k = 0, Nzp - 1
-        do i = 0, Nxm1
-          s1(i, k, j) = 0.5 * (u2(i, k, j) + u2(i, k, j + 1))
-        end do
-      end do
-    end do
-    ! Now interpolate onto GXF, GZF grid
-    do j = 1, Nyp
-      do k = 0, Nzp - 1
-        do i = 0, Nxm1
-          s2(i, k, j) = 0.25 * (s1(i, k, j) + s1(i+1, k, j) + s1(i, k+1, j) + s1(i+1, k+1, j))
+      do k = 0, twoNkz
+        do i = 0, Nxp - 1
+          cs1(i,k,j) = exp(cikx(i) * dx(1)/2.d0 + cikz(k) * dz(1)/2.d0) * cu1(i,k,j)
+          cs2(i,k,j) = exp(cikx(i) * dx(1)/2.d0 + cikz(k) * dz(1)/2.d0) * cu2(i,k,j)
+          cs3(i,k,j) = exp(cikx(i) * dx(1)/2.d0 + cikz(k) * dz(1)/2.d0) * cu3(i,k,j)
+          cs4(i,k,j) = exp(cikx(i) * dx(1)/2.d0 + cikz(k) * dz(1)/2.d0) * cth(i,k,j,1)
+          cs5(i,k,j) = exp(cikx(i) * dx(1)/2.d0 + cikz(k) * dz(1)/2.d0) * cp(i,k,j)
         end do
       end do
     end do
 
-    ! Interpolate horizontal x-velocity onto GXF, GZF grid
-    do j = 1, Nyp
-      do k = 0, Nzp - 1
-        do i = 0, Nxm1
-          s1(i, k, j) = 0.25 * (u1(i, k, j) + u1(i+1, k, j) + u1(i, k+1, j) + u1(i+1, k+1, j))
-        end do
-      end do
-    end do
+    ! Convert back to physical space
+    call fft_xz_to_physical(cu1, u1)
+    call fft_xz_to_physical(cu2, u2)
+    call fft_xz_to_physical(cu3, u3)
+    call fft_xz_to_physical(cth(:, :, :, 1), th(:, :, :, 1))
+    ! p already in Fourier space
 
-    ! Interpolate horizontal x-velocity onto GXF, GZF grid
-    do j = 1, Nyp
-      do k = 0, Nzp - 1
-        do i = 0, Nxm1
-          s3(i, k, j) = 0.25 * (u3(i, k, j) + u3(i+1, k, j) + u3(i, k+1, j) + u3(i+1, k+1, j))
-        end do
-      end do
-    end do
+    call fft_xz_to_physical(cs1, s1)
+    call fft_xz_to_physical(cs2, s2)
+    call fft_xz_to_physical(cs3, s3)
+    call fft_xz_to_physical(cs4, s4)
+    call fft_xz_to_physical(cs5, s5)
 
-    ! Interpolate buoyancy onto GXF, GZF grid
-    do j = 1, Nyp
-      do k = 0, Nzp - 1
-        do i = 0, Nxm1
-          s4(i, k, j) = 0.25 * (th(i, k, j, 1) + th(i+1, k, j, 1) + th(i, k+1, j, 1) + th(i+1, k+1, j, 1))
-        end do
-      end do
-    end do
 
+    ! Move vertical velocity back to vertical full grid
+    call gf2g(u2)
 
     !!! Compute radial and azimuthal velocity !!!
-    ! Store u_r in r1 and u_theta in r2
     do j = 1, Nyp
       do k = 0, Nzp - 1
         do i = 0, Nxm1
             ur(i, k, j) =  ( (gxf(i) - LX/2.d0) * s1(i, k, j) + (gzf(rankZ*Nzp+k) - LZ/2.d0) * s3(i, k, j) ) / &
                     sqrt( (gxf(i) - LX/2.d0)**2.d0 + (gzf(rankZ*Nzp+k) - LZ/2.d0)**2.d0 )
-            utheta(i, k, j) =  ( (gx(i) - LX/2.d0) * s3(i, k, j) - (gz(rankZ*Nzp+k) - LZ/2.d0) * s1(i, k, j) ) / &
+            utheta(i, k, j) =  ( (gxf(i) - LX/2.d0) * s3(i, k, j) - (gzf(rankZ*Nzp+k) - LZ/2.d0) * s1(i, k, j) ) / &
                     sqrt( (gxf(i) - LX/2.d0)**2.d0 + (gzf(rankZ*Nzp+k) - LZ/2.d0)**2.d0 )
         end do
       end do
     end do
 
-    !!! Compute azimuthal averages !!!
-
-    gname = 'b_az'
-    call compute_azavg_and_sfluc(gname, s4, b_sfluc)
-
+    ! Compute azimuthal averages
     gname = 'u_az'
     call compute_azavg_and_sfluc(gname, ur, u_sfluc)
 
     gname = 'v_az'
-    call compute_azavg_and_sfluc(gname, utheta, u_sfluc)
+    call compute_azavg_and_sfluc(gname, utheta, v_sfluc)
 
     gname = 'w_az'
     call compute_azavg_and_sfluc(gname, s2, w_sfluc)
 
+    gname = 'b_az'
+    call compute_azavg_and_sfluc(gname, s4, b_sfluc)
+
     gname = 'p_az'
-    call compute_azavg(gname, p)
+    call compute_azavg(gname, s5)
 
     !!! Compute spatial covariances !!!
     gname = 'uu_sfluc'
-    call compute_azavg(gname, u_sfluc * u_sfluc)
+    s1 = u_sfluc * u_sfluc
+    call compute_azavg(gname, s1)
 
     gname = 'uv_sfluc'
-    call compute_azavg(gname, u_sfluc * v_sfluc)
+    s1 = u_sfluc * v_sfluc
+    call compute_azavg(gname, s1)
 
     gname = 'uw_sfluc'
-    call compute_azavg(gname, u_sfluc * w_sfluc)
+    s1 = u_sfluc * w_sfluc
+    call compute_azavg(gname, s1)
 
     gname = 'ub_sfluc'
-    call compute_azavg(gname, u_sfluc * b_sfluc)
+    s1 = u_sfluc * b_sfluc
+    call compute_azavg(gname, s1)
 
     gname = 'vv_sfluc'
-    call compute_azavg(gname, v_sfluc * v_sfluc)
+    s1 = v_sfluc * v_sfluc
+    call compute_azavg(gname, s1)
 
     gname = 'vw_sfluc'
-    call compute_azavg(gname, v_sfluc * w_sfluc)
+    s1 = v_sfluc * w_sfluc
+    call compute_azavg(gname, s1)
 
     gname = 'ww_sfluc'
-    call compute_azavg(gname, w_sfluc * w_sfluc)
+    s1 = w_sfluc * w_sfluc
+    call compute_azavg(gname, s1)
 
     gname = 'wb_sfluc'
-    call compute_azavg(gname, w_sfluc * b_sfluc)
+    s1 = w_sfluc * b_sfluc
+    call compute_azavg(gname, s1)
 
     gname = 'bb_sfluc'
-    call compute_azavg(gname, b_sfluc * b_sfluc)
+    s1 = b_sfluc * b_sfluc
+    call compute_azavg(gname, s1)
 
 
 
@@ -925,7 +927,7 @@ subroutine compute_TKE_diss(movie)
   ! Store the 3D dissipation rate in F1
   f1 = 0.d0
 
-  ! Compute the turbulent dissipation rate, epsilon=nu*<du_i/dx_j du_i/dx_j>
+  ! Compute the turbulent dissipation rate, epsilon=nu*<du_i/ex_j du_i/dx_j>
   ! epsilon will be calculated on the GY grid (2:Nyp)
   !  This is so that it remains conserved (as in the code)
   epsilon = 0.
@@ -1707,7 +1709,7 @@ subroutine compute_Vorticity(movie)
 
   ! Y-component in FF space
   do j = 1, Nyp
-    do k = 0, twoNkz
+    do k = 0, twoNkz 
       do i = 0, Nxp - 1 !Nkx
         cs1(i, k, j) = cikx(i) * cr3(i, k, j) - cikz(k) * cr1(i, k, j)
       end do
@@ -1840,29 +1842,29 @@ subroutine compute_azavg_and_sfluc(gname, field, flucfield)
   ! CWP 2022
 
   character(len=20) gname
-  real(rkind), intent(in) :: field(:,:,:)
-  real(rkind), intent(out) :: flucfield(:,:,:)
+  real(rkind), pointer, intent(in) :: field(:,:,:)
+  real(rkind), pointer, intent(inout) :: flucfield(:,:,:)
 
   character(len=35) fname
   integer i, j, k, bin
   integer, parameter :: Nbin = Nx/2
-  real(rkind) field_binned(0:Nbin-1, 1:Nyp)
-  real(rkind) counts(0:Nbin-1, 1:Nyp)
+  real(rkind) field_binned(0:Nbin-1, 0:Nyp-1)
+  real(rkind) counts(0:Nbin-1, 0:Nyp-1)
 
   ! Sum field by radius bin
   field_binned = 0.d0
   counts = 0.d0
 
-  do j = 1, Nyp
-    do k = 1, Nzp ! Why does 0, Nzp - 1 not work???
-      do i = 1, Nx ! Why does 0, Nxm1 not work???
+  do j = 1, Nyp 
+    do k = 0, Nzp-1
+      do i = 0, Nxm1
         ! Compute bin index
-        bin = int((sqrt((gxf(i)-Lx/2.d0)**2.d0 + (gzf(rankZ*Nzp+k)-Lz/2.d0)**2.d0)) * Nx/Lx)
-        
+        bin = int(sqrt((gxf(i)-Lx/2.d0)**2.d0 + (gzf(rankZ*Nzp+k)-Lz/2.d0)**2.d0) * Nx/Lx)
+
         if (bin < Nbin) then
-          ! Add values to corresponding bin and increase count
-          counts(bin, j) = counts(bin, j) + 1.d0
-          field_binned(bin, j) = field_binned(bin, j) + field(i,k,j)
+          ! Add values to corresponding bin and increase count (want j=0 to be bottom of domain in output)
+          counts(bin, j-1) = counts(bin, j-1) + 1.d0
+          field_binned(bin, j-1) = field_binned(bin, j-1) + field(i,k,j)
         end if
       end do
     end do
@@ -1871,11 +1873,11 @@ subroutine compute_azavg_and_sfluc(gname, field, flucfield)
   ! Collect results from all processors
   call mpi_allreduce(mpi_in_place, field_binned, Nbin * Nyp, mpi_double_precision, &
                      mpi_sum, mpi_comm_z, ierror)
-  call mpi_allreduce(mpi_in_place, counts, Nbin * Nyp, mpi_double_precision, &
+  call mpi_allreduce(mpi_in_place, counts, Nbin * Nyp,  mpi_double_precision, &
                      mpi_sum, mpi_comm_z, ierror)
 
   ! Divide by counts to get average
-  do j = 1, Nyp
+  do j = 0, Nyp-1
     do i = 0, Nbin-1
       if (counts(i,j) > 0) then
         field_binned(i, j) = field_binned(i, j) / counts(i, j)
@@ -1885,21 +1887,22 @@ subroutine compute_azavg_and_sfluc(gname, field, flucfield)
 
   call mpi_barrier(mpi_comm_z, ierror)
 
-  ! Write to file (how to make new file and write only half slices?)
+  ! Write to file 
   fname = 'az_stats.h5'
   if (rankZ == 0) then
     call WriteHDF5_RYplane(fname, gname, field_binned)
   end if
 
 
-  do j = 1, Nyp
-    do k = 1, Nzp ! Why does 0, Nzp - 1 not work???
-      do i = 1, Nx ! Why does 0, Nxm1 not work???
+  ! Compute spatial fluctuation (difference between az avg and data)
+  do j = 1, Nyp 
+    do k = 0, Nzp-1
+      do i = 0, Nxm1
         ! Compute bin index
-        bin = int((sqrt((gxf(i)-Lx/2.d0)**2.d0 + (gzf(rankZ*Nzp+k)-Lz/2.d0)**2.d0)) * Nx/Lx)
+        bin = int(sqrt((gxf(i)-Lx/2.d0)**2.d0 + (gzf(rankZ*Nzp+k)-Lz/2.d0)**2.d0) * Nx/Lx)
 
         if (bin < Nbin) then
-          flucfield(i, k, j) = field(i, k, j) - field_binned(bin, j)
+          flucfield(i, k, j) = field(i, k, j) - field_binned(bin, j-1) ! offset due to output starting at j=0, not 1
         else
           flucfield(i, k, j) = 0.d0
         end if
@@ -1907,9 +1910,8 @@ subroutine compute_azavg_and_sfluc(gname, field, flucfield)
     end do
   end do
 
-  call mpi_allreduce(mpi_in_place, flucfield, Nx * Nzp * Nyp, mpi_double_precision, &
-                     mpi_sum, mpi_comm_z, ierror)
-
+  ! Ensure entire fluctuation field is computed
+  call mpi_barrier(mpi_comm_z, ierror)
 end
 
 !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
@@ -1920,28 +1922,28 @@ subroutine compute_azavg(gname, field)
   ! CWP 2022
 
   character(len=20) gname
-  real(rkind), intent(in) :: field(:,:,:)
+  real(rkind), pointer, intent(in) :: field(:,:,:)
 
   character(len=35) fname
   integer i, j, k, bin
   integer, parameter :: Nbin = Nx/2
-  real(rkind) field_binned(0:Nbin-1, 1:Nyp)
-  real(rkind) counts(0:Nbin-1, 1:Nyp)
+  real(rkind) field_binned(0:Nbin-1, 0:Nyp-1)
+  real(rkind) counts(0:Nbin-1, 0:Nyp-1)
 
   ! Sum field by radius bin
   field_binned = 0.d0
   counts = 0.d0
 
-  do j = 1, Nyp
-    do k = 1, Nzp ! Why does 0, Nzp - 1 not work???
-      do i = 1, Nx ! Why does 0, Nxm1 not work???
+  do j = 1, Nyp 
+    do k = 0, Nzp-1
+      do i = 0, Nxm1
         ! Compute bin index
         bin = int(sqrt((gxf(i)-Lx/2.d0)**2.d0 + (gzf(rankZ*Nzp+k)-Lz/2.d0)**2.d0) * Nx/Lx)
         
         if (bin < Nbin) then
-          ! Add values to corresponding bin and increase count
-          counts(bin, j) = counts(bin, j) + 1.d0
-          field_binned(bin, j) = field_binned(bin, j) + field(i,k,j)
+          ! Add values to corresponding bin and increase count (want j=0 to be bottom of domain in output)
+          counts(bin, j-1) = counts(bin, j-1) + 1.d0
+          field_binned(bin, j-1) = field_binned(bin, j-1) + field(i,k,j)
         end if
       end do
     end do
@@ -1950,11 +1952,11 @@ subroutine compute_azavg(gname, field)
   ! Collect results from all processors
   call mpi_allreduce(mpi_in_place, field_binned, Nbin * Nyp, mpi_double_precision, &
                      mpi_sum, mpi_comm_z, ierror)
-  call mpi_allreduce(mpi_in_place, counts, Nbin * Nyp, mpi_double_precision, &
+  call mpi_allreduce(mpi_in_place, counts, Nbin * Nyp,  mpi_double_precision, &
                      mpi_sum, mpi_comm_z, ierror)
 
   ! Divide by counts to get average
-  do j = 1, Nyp
+  do j = 0, Nyp-1
     do i = 0, Nbin-1
       if (counts(i,j) > 0) then
         field_binned(i, j) = field_binned(i, j) / counts(i, j)
@@ -1964,7 +1966,7 @@ subroutine compute_azavg(gname, field)
 
   call mpi_barrier(mpi_comm_z, ierror)
 
-  ! Write to file (how to make new file and write only half slices?)
+  ! Write to file
   fname = 'az_stats.h5'
   if (rankZ == 0) then
     call WriteHDF5_RYplane(fname, gname, field_binned)
