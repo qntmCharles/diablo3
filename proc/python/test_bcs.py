@@ -9,7 +9,7 @@ from functions import get_metadata, read_params, get_grid
 ##### USER DEFINED VARIABLES #####
 
 params_file = "./params.dat"
-out_file = "out.000106.h5"
+out_file = "out.000030.h5"
 
 ##### ---------------------- #####
 

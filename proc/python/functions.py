@@ -38,7 +38,7 @@ def get_metadata(run_dir, version):
                 words = [y.split(',')[0] for y in lines[i].split()]
                 if name in words:
                     param_line = i
-                    if name == "SAVE_MOVIE_DT":
+                    if name in ["SAVE_MOVIE_DT", "SAVE_FLOW_DT", "SAVE_STATS_DT"]:
                         param_col = words.index(name)-len(words)-1
                     else:
                         param_col = words.index(name)-len(words)
@@ -81,7 +81,7 @@ def get_grid(grid_file, md, fractional_grid=True):
     if fractional_grid:
         return gxf, gyf, gzf, dz
     else:
-        return gx, gy, gz, dz
+        return gx, gy, gz, gz[1:]-gz[:-1]
 
 def get_az_data(data_file, md):
     data_dict = {}
@@ -120,8 +120,9 @@ def get_az_data(data_file, md):
             t_start = u_az[time_keys[0]].attrs['Time']-md['SAVE_STATS_DT']
         t_end = u_az[time_keys[-1]].attrs['Time']
         t_run = t_end - t_start
+        print(t_run)
 
-        print("Computing t = {0:.4f}".format(int(time_keys[0])*md['SAVE_STATS_DT']))
+        print("Computing t = {0:.4f}".format(u_az[time_keys[0]].attrs['Time']))
         ubar = u_az[time_keys[0]][()]*md['SAVE_STATS_DT']
         vbar = v_az[time_keys[0]][()]*md['SAVE_STATS_DT']
         wbar = w_az[time_keys[0]][()]*md['SAVE_STATS_DT']
@@ -140,7 +141,7 @@ def get_az_data(data_file, md):
 
         # Compute sum
         for t_key in time_keys[1:]:
-            print("Computing t = {0:.4f}".format(int(t_key)*md['SAVE_STATS_DT']))
+            print("Computing t = {0:.4f}".format(u_az[t_key].attrs['Time']))
             ubar += u_az[t_key][()]*md['SAVE_STATS_DT']
             vbar += v_az[t_key][()]*md['SAVE_STATS_DT']
             wbar += w_az[t_key][()]*md['SAVE_STATS_DT']
@@ -181,7 +182,7 @@ def get_az_data(data_file, md):
 
         # Initialise
         print("Calculating fluctuations...")
-        print("Computing t = {0:.4f}".format(int(time_keys[0])*md['SAVE_STATS_DT']))
+        print("Computing t = {0:.4f}".format(u_az[time_keys[0]].attrs['Time']))
         u_tfluc = u_az[time_keys[0]][()] - ubar
         v_tfluc = v_az[time_keys[0]][()] - vbar
         w_tfluc = w_az[time_keys[0]][()] - wbar
@@ -199,7 +200,7 @@ def get_az_data(data_file, md):
 
         # Compute sum
         for t_key in time_keys[1:]:
-            print("Computing t = {0:.4f}".format(int(t_key)*md['SAVE_STATS_DT']))
+            print("Computing t = {0:.4f}".format(u_az[t_key].attrs['Time']))
             u_tfluc = u_az[t_key][()] - ubar
             v_tfluc = v_az[t_key][()] - vbar
             w_tfluc = w_az[t_key][()] - wbar

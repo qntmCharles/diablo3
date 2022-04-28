@@ -14,8 +14,8 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 ##### USER-DEFINED PARAMETERS #####
 params_file = "./params.dat"
 
-z_upper = 70 # non-dim, scaled by r_0
-z_lower = 40
+z_upper = 60 # non-dim, scaled by r_0
+z_lower = 10
 
 eps = 0.02
 
@@ -98,8 +98,8 @@ if cont_valid_indices[-1] == md['Nz']-1:
 
 # check where rtrunc is, if at the edge of domain then remove index from list
 plume_indices = []
-z_lower_ind = int(min(np.where(gzfp <= z_upper*r_0)[0]))
-z_upper_ind = int(max(np.where(z_lower*r_0 <= gzfp)[0]))
+z_upper_ind = int(max(np.where(gzf <= z_upper*r_0)[0]))
+z_lower_ind = int(min(np.where(z_lower*r_0 <= gzf)[0]))
 for j in cont_valid_indices:
     wtrunc = 0.02*wbar[j, 0]
     rtrunc = max(np.where(wbar[j,:] > wtrunc)[0])
@@ -108,8 +108,10 @@ for j in cont_valid_indices:
 
 # This array contains the largest continuous run of indices which have a positive centreline velocity
 # and valid truncation radius, at z levels between z_lower and z_upper
-cont_plume_indices = list(set(list(sum(max([list(y) for i, y in groupby(zip(plume_indices,
+plume_indices = list(set(list(sum(max([list(y) for i, y in groupby(zip(plume_indices,
     plume_indices[1:]), key = lambda x: (x[1]-x[0]) == 1)], key=len),()))))
+
+print(plume_indices)
 
 ##### Truncate data at radius where wbar(r) = eps*wbar(0) #####
 
@@ -178,7 +180,7 @@ beta_p_avg = np.nanmean(beta_p)
 
 ##### Estimate alpha_p (plume entrainment coefficient) #####
 analytic_r = lambda z,a,z0: 6/5 * a * (z-z0) * r_0
-z_comp = np.array([gzfp[i]/r_0 for i in plume_indices])
+z_comp = np.array([gzf[i]/r_0 for i in plume_indices])
 r_comp = np.array([r_m[i] for i in plume_indices])
 
 popt, _ = optimize.curve_fit(analytic_r, z_comp, r_comp)
@@ -188,9 +190,9 @@ z_virt = popt[1]
 Gamma = 5*F*np.power(Q,2)/(8*alpha_p*beta_g*theta_m*np.power(M,5/2))
 
 ##### Calculate alpha (entrainment coefficient) analytically #####
-dQdz = np.gradient(Q[plume_indices], gzfp[plume_indices])
+dQdz = np.gradient(Q[plume_indices], gzf[plume_indices])
 alpha = 0.5*np.power(M[plume_indices],-1/2)*dQdz
-zplot = gzfp[plume_indices]
+zplot = gzf[plume_indices]
 
 ##### Decompose entrainment coefficient #####
 alpha_prod = -0.5*delta_g[plume_indices]/gamma_g[plume_indices]
@@ -203,7 +205,7 @@ shape_operand = np.log(np.power(gamma_g,1/2)/beta_g)[plume_indices]
 # smoothed alpha_shape:
 nbin = 17
 kernel = np.ones(nbin)/nbin
-gradient_shape = np.gradient(shape_operand,gzfp[plume_indices])
+gradient_shape = np.gradient(shape_operand,gzf[plume_indices])
 padded_shape = np.pad(gradient_shape, (nbin//2,nbin-1-nbin//2),mode='edge')
 alpha_shape = r_m[plume_indices]*np.convolve(padded_shape,kernel,mode='valid')
 
@@ -286,7 +288,7 @@ xi = np.cbrt(np.trace(b3,axis1=1,axis2=2)/6)
 # Set up colourbar for height z
 cols = plt.cm.rainbow(np.linspace(0,1,len(plume_indices)))
 sm = plt.cm.ScalarMappable(cmap='rainbow',
-        norm=plt.Normalize(vmin=gzfp[plume_indices[0]],vmax=gzfp[plume_indices[-1]]))
+        norm=plt.Normalize(vmin=np.min(gzf[plume_indices]),vmax=np.max(gzf[plume_indices])))
 
 ##### ----------------------- #####
 #TODO improve analytic plotting
@@ -294,8 +296,8 @@ sm = plt.cm.ScalarMappable(cmap='rainbow',
 
 fig1 = plt.figure()
 fig1.suptitle("Fig 1(d): numerical and analytic characteristic scales $w_m, b_m$")
-plt.loglog(gzfp/r_0,b_m/np.nanmean(b_m), color='b', label="$b_m/b_{{m0}}$")
-plt.loglog(gzfp/r_0,w_m/np.nanmean(w_m), color='r', label="$w_m/w_{{m0}}$")
+plt.loglog(gzf/r_0,b_m/np.nanmean(b_m), color='b', label="$b_m/b_{{m0}}$")
+plt.loglog(gzf/r_0,w_m/np.nanmean(w_m), color='r', label="$w_m/w_{{m0}}$")
 plt.legend()
 yrange = plt.gca().get_ylim()
 xvals = [5,6,7,8,9,20,30,40,50,60,70,80,90]
@@ -309,13 +311,13 @@ plt.xlabel("$z/r_0$")
 
 F_0 = md['Q0'] * np.pi * r_0**2
 w_m_analytic = 5/6 * 1/alpha_p * np.power(9/10 * alpha_p * F_0/(theta_m_avg * beta_g_avg), 1/3) * \
-        np.power(gzfp, -1/3)
+        np.power(gzf, -1/3)
 b_m_analytic = 5/6 * F_0/(alpha_p*theta_m_avg) * np.power(9/10 * alpha_p * F_0/(theta_m_avg * \
-        beta_g_avg), -1/3) * np.power(gzfp, -5/3)
+        beta_g_avg), -1/3) * np.power(gzf, -5/3)
 
-plt.loglog(gzfp[plume_indices]/r_0, b_m_analytic[plume_indices]/np.nanmean(b_m),
+plt.loglog(gzf[plume_indices]/r_0, b_m_analytic[plume_indices]/np.nanmean(b_m),
         color='b',linestyle='dashed')
-plt.loglog(gzfp[plume_indices]/r_0, w_m_analytic[plume_indices]/np.nanmean(w_m),
+plt.loglog(gzf[plume_indices]/r_0, w_m_analytic[plume_indices]/np.nanmean(w_m),
         color='r',linestyle='dashed')
 
 ##### ----------------------- #####
@@ -436,15 +438,15 @@ plt.legend()
 wbar_plot = wbar_trunc[plume_indices]
 fig7 = plt.figure(figsize=(4,8))
 fig7.suptitle("Fig 1(a): ensemble and azimuthally \n averaged plume with radii scales")
-plt.imshow(wbar_plot,cmap='jet',extent=[0, md['LX']/(2*r_0), gzfp[plume_indices[-1]]/r_0,
-    gzfp[plume_indices[0]]/r_0])
-plt.plot([i/r_0 for i in r_d], gzfp[plume_indices]/r_0, color='r',label="threshold radius")
-plt.plot([analytic_r(gzfp[i]/r_0,0.105,z_virt)/r_0 for i in plume_indices],
-        gzfp[plume_indices]/r_0, color='g', label="analytic radius (MvR)")
-plt.plot(r_m[plume_indices]/r_0, gzfp[plume_indices]/r_0, color='y',
+plt.imshow(np.flip(wbar_plot,axis=0),cmap='jet',extent=[0, md['LX']/(2*r_0), np.min(gzf[plume_indices])/r_0,
+    np.max(gzf[plume_indices])/r_0])
+plt.plot([i/r_0 for i in r_d], gzf[plume_indices]/r_0, color='r',label="threshold radius")
+plt.plot([analytic_r(gzf[i]/r_0,0.105,z_virt)/r_0 for i in plume_indices],
+        gzf[plume_indices]/r_0, color='g', label="analytic radius (MvR)")
+plt.plot(r_m[plume_indices]/r_0, gzf[plume_indices]/r_0, color='y',
         label="characteristic radius $r_m$")
-plt.plot([analytic_r(gzfp[i]/r_0, alpha_p, z_virt)/r_0 for i in plume_indices],
-        gzfp[plume_indices]/r_0, color='orange', label="analytic radius (diablo)")
+plt.plot([analytic_r(gzf[i]/r_0, alpha_p, z_virt)/r_0 for i in plume_indices],
+        gzf[plume_indices]/r_0, color='orange', label="analytic radius (diablo)")
 plt.legend()
 plt.xlabel("$r/r_0$")
 plt.ylabel("$z/r_0$")
@@ -457,11 +459,11 @@ fig8.suptitle("Fig 2(a): flux balance \
         parameter $\\Gamma = 5FQ^2 / 8\\beta_g \\alpha_p \\theta_m M^{{5/2}}$")
 plt.ylabel("$z/r_0$")
 plt.xlabel("$\\Gamma$")
-plt.plot(Gamma[plume_indices], gzfp[plume_indices]/r_0)
+plt.plot(Gamma[plume_indices], gzf[plume_indices]/r_0)
 plt.xlim(0,2)
-plt.plot([1,1],[gzfp[plume_indices[-1]]/r_0, gzfp[plume_indices[0]]/r_0],
+plt.plot([1,1],[np.min(gzf[plume_indices])/r_0, np.max(gzf[plume_indices])/r_0],
     linestyle='dashed', color='k')
-plt.ylim(gzfp[plume_indices[-1]]/r_0,gzfp[plume_indices[0]]/r_0)
+plt.ylim(np.min(gzf[plume_indices])/r_0, np.max(gzf[plume_indices])/r_0)
 plt.tight_layout()
 
 ##### ----------------------- #####
@@ -475,7 +477,7 @@ plt.plot(alpha, zplot/r_0)
 plt.plot([alpha_p]*(len(zplot)), zplot/r_0, color='black', linestyle='dashed',
         label="$\\alpha_p = {0:.3f}$".format(alpha_p))
 plt.legend()
-plt.ylim(gzfp[plume_indices[-1]]/r_0,gzfp[plume_indices[0]]/r_0)
+plt.ylim(np.min(gzf[plume_indices])/r_0, np.max(gzf[plume_indices])/r_0)
 plt.xlim(0,0.2)
 
 ##### ----------------------- #####
@@ -484,43 +486,43 @@ plt.xlim(0,0.2)
 fig10, ax10 = plt.subplots(1,3,figsize=(12,5))
 fig10.suptitle("Fig 9(c): mean profile coefficients")
 ax10[0].set_xlim(-0.6, 1.4)
-ax10[0].set_ylim(gzfp[plume_indices[-1]]/r_0,gzfp[plume_indices[0]]/r_0)
+ax10[0].set_ylim(np.min(gzf[plume_indices])/r_0, np.max(gzf[plume_indices])/r_0)
 ax10[0].set_ylabel("$z/r_0$")
 ax10[0].set_xlabel("$r/r_m$")
 ax10[0].set_title("Mean flow contribution")
-ax10[0].plot(theta_m[plume_indices],gzfp[plume_indices]/r_0, linestyle="-.",color='purple',
+ax10[0].plot(theta_m[plume_indices],gzf[plume_indices]/r_0, linestyle="-.",color='purple',
         label="$\\theta_m$")
-ax10[0].plot(gamma_m[plume_indices],gzfp[plume_indices]/r_0, linestyle="--",color='red',
+ax10[0].plot(gamma_m[plume_indices],gzf[plume_indices]/r_0, linestyle="--",color='red',
         label="$\\gamma_m$")
-ax10[0].plot(delta_m[plume_indices],gzfp[plume_indices]/r_0,color='orange',
+ax10[0].plot(delta_m[plume_indices],gzf[plume_indices]/r_0,color='orange',
         label="$\\delta_m$")
-ax10[0].plot(beta_m*np.ones_like(plume_indices),gzfp[plume_indices]/r_0, color='b',
+ax10[0].plot(beta_m*np.ones_like(plume_indices),gzf[plume_indices]/r_0, color='b',
         label="$\\beta_m=1$")
 ax10[0].legend()
 
 ax10[1].set_xlim(-0.6, 1.4)
-ax10[1].set_ylim(gzfp[plume_indices[-1]]/r_0,gzfp[plume_indices[0]]/r_0)
+ax10[1].set_ylim(np.min(gzf[plume_indices])/r_0, np.max(gzf[plume_indices])/r_0)
 ax10[1].set_xlabel("$r/r_m$")
 ax10[1].set_title("Turbulence contribution")
-ax10[1].plot(theta_f[plume_indices],gzfp[plume_indices]/r_0, linestyle="-.",color='purple',
+ax10[1].plot(theta_f[plume_indices],gzf[plume_indices]/r_0, linestyle="-.",color='purple',
         label="$\\theta_f$")
-ax10[1].plot(gamma_f[plume_indices],gzfp[plume_indices]/r_0, linestyle="--",color='red',
+ax10[1].plot(gamma_f[plume_indices],gzf[plume_indices]/r_0, linestyle="--",color='red',
         label="$\\gamma_f$")
-ax10[1].plot(delta_f[plume_indices],gzfp[plume_indices]/r_0,color='orange',
+ax10[1].plot(delta_f[plume_indices],gzf[plume_indices]/r_0,color='orange',
         label="$\\delta_f$")
-ax10[1].plot(beta_f[plume_indices],gzfp[plume_indices]/r_0, color='b',
+ax10[1].plot(beta_f[plume_indices],gzf[plume_indices]/r_0, color='b',
         label="$\\beta_f$")
 ax10[1].legend()
 
 ax10[2].set_xlim(-0.6, 1.4)
 ax10[2].set_title("Pressure contribution")
-ax10[2].set_ylim(gzfp[plume_indices[-1]]/r_0,gzfp[plume_indices[0]]/r_0)
+ax10[2].set_ylim(np.min(gzf[plume_indices])/r_0, np.max(gzf[plume_indices])/r_0)
 ax10[2].set_xlabel("$r/r_m$")
-ax10[2].plot(gamma_p[plume_indices],gzfp[plume_indices]/r_0, linestyle="--",color='red',
+ax10[2].plot(gamma_p[plume_indices],gzf[plume_indices]/r_0, linestyle="--",color='red',
         label="$\\gamma_p$")
-ax10[2].plot(delta_p[plume_indices],gzfp[plume_indices]/r_0,color='orange',
+ax10[2].plot(delta_p[plume_indices],gzf[plume_indices]/r_0,color='orange',
         label="$\\delta_p$")
-ax10[2].plot(beta_p[plume_indices],gzfp[plume_indices]/r_0, color='b',
+ax10[2].plot(beta_p[plume_indices],gzf[plume_indices]/r_0, color='b',
         label="$\\beta_p$")
 ax10[2].legend()
 plt.tight_layout()
@@ -532,13 +534,13 @@ plt.title("Fig 9(f): relative contribution of turbulence and pressure")
 plt.xlim(-0.3, 0.3)
 plt.xlabel("$r/r_m$")
 plt.ylabel("$z/r_0$")
-plt.ylim(gzfp[plume_indices[-1]]/r_0,gzfp[plume_indices[0]]/r_0)
-plt.plot(beta_g[plume_indices]-1, gzfp[plume_indices]/r_0, color='b',label="$\\beta_g-1$")
-plt.plot(((gamma_g-gamma_m)/gamma_m)[plume_indices], gzfp[plume_indices]/r_0, color='red',
+plt.ylim(np.min(gzf[plume_indices])/r_0, np.max(gzf[plume_indices])/r_0)
+plt.plot(beta_g[plume_indices]-1, gzf[plume_indices]/r_0, color='b',label="$\\beta_g-1$")
+plt.plot(((gamma_g-gamma_m)/gamma_m)[plume_indices], gzf[plume_indices]/r_0, color='red',
         linestyle='dashed',label="$(\\gamma_g-\gamma_m)/\\gamma_m$")
-plt.plot(((delta_g-delta_m)/delta_m)[plume_indices], gzfp[plume_indices]/r_0, color='orange',
+plt.plot(((delta_g-delta_m)/delta_m)[plume_indices], gzf[plume_indices]/r_0, color='orange',
         label="$(\\delta_g-\delta_m)/\\delta_m$")
-plt.plot(((theta_g-theta_m)/theta_m)[plume_indices], gzfp[plume_indices]/r_0, color='purple',
+plt.plot(((theta_g-theta_m)/theta_m)[plume_indices], gzf[plume_indices]/r_0, color='purple',
         linestyle='-.',label="$(\\theta_g-\\theta_m)/\\theta_m$")
 plt.legend()
 plt.tight_layout()
@@ -546,10 +548,10 @@ plt.tight_layout()
 ##### ----------------------- #####
 
 fig12 = plt.figure()
-plt.plot(alpha_prod, gzfp[plume_indices],color="b",label="$\\alpha_{prod}}$")
-plt.plot(alpha_Ri, gzfp[plume_indices],color="red",linestyle="--",label="$\\alpha_\\mathrm{{Ri}}$")
-plt.plot(alpha_shape, gzfp[plume_indices],color="orange",label="$\\alpha_{{shape}}$")
-plt.plot(alpha_prod+alpha_Ri+alpha_shape, gzfp[plume_indices], color="purple", linestyle="-.",
+plt.plot(alpha_prod, gzf[plume_indices],color="b",label="$\\alpha_{prod}}$")
+plt.plot(alpha_Ri, gzf[plume_indices],color="red",linestyle="--",label="$\\alpha_\\mathrm{{Ri}}$")
+plt.plot(alpha_shape, gzf[plume_indices],color="orange",label="$\\alpha_{{shape}}$")
+plt.plot(alpha_prod+alpha_Ri+alpha_shape, gzf[plume_indices], color="purple", linestyle="-.",
         label="$\\sum \\alpha_\\chi$")
 #plt.plot(alpha_prod[-1]+alpha_Ri+alpha_shape, gzfp[plume_indices], color="purple", linestyle=":",
         #alpha=0.5)

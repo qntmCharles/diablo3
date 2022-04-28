@@ -44,6 +44,8 @@ data1 = np.flip(data1,axis=1)
 data2 = np.flip(data2,axis=1)
 data3 = np.flip(data3,axis=1)
 
+print(data3[0,0,:])
+
 print("Total time steps: %s"%NSAMP)
 print("Dimensional times: ",times)
 
@@ -72,16 +74,19 @@ cb[0] = plt.colorbar(ims[0],ax=ax[0])
 cb[1] = plt.colorbar(ims[1],ax=ax[1])
 cb[2] = plt.colorbar(ims[2],ax=ax[2])
 ims[0].set_clim(0, 0.1)
-ims[1].set_clim(0, 0.1)
-ims[2].set_clim(0, 0.1)
+#ims[1].set_clim(0, 0.1)
+#ims[2].set_clim(0, 0.1)
 
 fig.suptitle("time = 0 mins")
 ax[0].set_ylabel("$z$")
 ax[0].set_xlabel("$x$")
+ax[0].set_title(var1)
 ax[1].set_ylabel("$z$")
 ax[1].set_xlabel("$x$")
+ax[1].set_title(var2)
 ax[2].set_ylabel("$z$")
 ax[2].set_xlabel("$x$")
+ax[2].set_title(var3)
 plt.tight_layout()
 
 def animate(step):
@@ -100,7 +105,7 @@ Writer = animation.writers['ffmpeg']
 writer = Writer(fps=20, bitrate=1800)
 
 print("Starting plot...")
-anim = animation.FuncAnimation(fig, animate, interval=500, frames=NSAMP)
+anim = animation.FuncAnimation(fig, animate, interval=50, frames=NSAMP)
 now = datetime.now()
 
 if save:

@@ -16,7 +16,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 params_file = "./params.dat"
 
 z_upper = 70 # non-dim, scaled by r_0
-z_lower = 40
+z_lower = 20
 
 eps = 0.02
 nplots = 5
@@ -72,6 +72,7 @@ vbar = data['v']
 wbar = data['w']
 bbar = data['b']
 pbar = data['p']
+print("Data has shape ", bbar.shape)
 
 fig1 = plt.figure()
 with h5py.File(save_dir+'az_stats.h5', 'r') as f:
@@ -82,7 +83,7 @@ with h5py.File(save_dir+'az_stats.h5', 'r') as f:
     cols = plt.cm.rainbow(np.linspace(1,0,len(time_keys)))
     for t,c in zip(time_keys,cols):
         data = b[t][()]
-        plt.plot(data[:,0],gzf,color=c,alpha=0.5)
+        plt.loglog(data[:,0],gzf,color=c,alpha=0.5)
 
 ##### Identify indices where plume is well defined #####
 
@@ -138,10 +139,21 @@ B = 2*integrate.trapezoid(bbar_trunc*r_integrate, r_integrate, axis=1)
 r_m = Q/np.sqrt(M)
 b_m = B/(r_m*r_m)
 
-plt.plot(2*b_m, gzf, label="$B/r_m^2$")
-plt.plot(bbar[:,0], gzf, color='k', linestyle='--', label="b centreline")
-#plt.xscale('log')
+plt.loglog(2*b_m, gzf, label="$B/r_m^2$",color='r')
+plt.loglog(bbar[:,0], gzf, color='k', linestyle='--', label="b centreline")
 fig1.legend()
+
+# Plot sample gradients over b profiles
+x_range = plt.gca().get_xlim()
+x_split = np.log((x_range[1]-x_range[0])*2)
+y_range = plt.gca().get_ylim()
+print(x_range)
+for i in range(-10,10):
+    plt.loglog(np.exp(x_split*i+np.log(gzf[-1]))*np.power(gzf, -5/3), gzf, alpha=0.7, color='grey')
+
+plt.xlim(np.min(bbar[:,0])-0.1*(np.max(bbar[:,0])-np.min(bbar[:,0])),1.5*np.max(bbar[:,0]))
+plt.ylim(gzf[0]+0.2*(gzf[-1]-gzf[0]),gzf[-1])
+plt.show()
 
 thresh = 3e-1
 
@@ -150,6 +162,7 @@ z_idxs = [int(zs[i]*md['Nz']/md['LZ']) for i in range(nplots)]
 print(zs)
 
 fig2, ax = plt.subplots(2,1,figsize=(15,10))
+fig2.suptitle("Vertical velocity steadiness")
 cols = plt.cm.rainbow(np.linspace(0,1,nplots))
 
 ts = np.array([md['SAVE_STATS_DT']*(float(t)-1) for t in time_keys])
@@ -170,7 +183,7 @@ for i,c in zip(range(nplots),cols):
     w_avg = []
     N = 10
     for j in range(1, N_trunc+1):
-        w_avg.append(sum(data_trunc[:j])/N_trunc)
+        w_avg.append(sum(data_trunc[:j])/j)
 
     w_running = uniform_filter1d(data, size=N, mode='nearest')
 
@@ -191,7 +204,7 @@ for i,c in zip(range(nplots),cols):
     ax[1].plot(ts_trunc, dwbardt_tavg, color=c,
         label="$\partial_t$ (time average $\overline{{w}}$) at z/r0={0:.1f}".format(zs[i]/r_0))
     ax[1].plot(ts, dwbardt_run, color=c, linestyle='--',
-        label="$\partial_t$ (time average $\overline{{w}}$) at z/r0={0:.1f}".format(zs[i]/r_0))
+        label="$\partial_t$ (running average $\overline{{w}}$) at z/r0={0:.1f}".format(zs[i]/r_0))
 
 ax[0].set_xlim(min(ts),max(ts))
 ax[0].legend()
