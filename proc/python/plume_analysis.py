@@ -13,9 +13,13 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 ##### USER-DEFINED PARAMETERS #####
 params_file = "./params.dat"
+#save_loc = "/home/cwp29/Documents/plume_project/figs/mvr/"
+save = False
+title = True
+show = True
 
-z_upper = 60 # non-dim, scaled by r_0
-z_lower = 10
+z_upper = 90
+z_lower = 20
 
 eps = 0.02
 
@@ -150,6 +154,9 @@ Q = 2*integrate.trapezoid(wbar_trunc*r_integrate, r_integrate, axis=1)
 M = 2*integrate.trapezoid(wbar_trunc*wbar_trunc*r_integrate, r_integrate, axis=1)
 F = 2*integrate.trapezoid(wbar_trunc*bbar_trunc*r_integrate, r_integrate, axis=1)
 B = 2*integrate.trapezoid(bbar_trunc*r_integrate, r_integrate, axis=1)
+print("Q:", Q)
+print("M:", M)
+print("F:", F)
 
 r_m = Q/np.sqrt(M)
 w_m = M/Q
@@ -173,10 +180,31 @@ beta_p = 2/(w_m*w_m*r_m*r_m)*integrate.trapezoid(pbar_trunc*r_integrate, r_integ
 beta_m = 1
 beta_g = 1 + beta_f + beta_p
 
-theta_m_avg = np.nanmean(theta_m)
-beta_f_avg = np.nanmean(beta_f)
-beta_g_avg = np.nanmean(beta_g)
-beta_p_avg = np.nanmean(beta_p)
+beta_m_avg = 1
+beta_f_avg = np.mean(beta_f[plume_indices])
+beta_p_avg = np.mean(beta_p[plume_indices])
+beta_g_avg = np.mean(beta_g[plume_indices])
+gamma_m_avg = np.mean(gamma_m[plume_indices])
+gamma_f_avg = np.mean(gamma_f[plume_indices])
+gamma_p_avg = np.mean(gamma_p[plume_indices])
+gamma_g_avg = np.mean(gamma_g[plume_indices])
+delta_m_avg = np.mean(delta_m[plume_indices])
+delta_f_avg = np.mean(delta_f[plume_indices])
+delta_p_avg = np.mean(delta_p[plume_indices])
+delta_g_avg = np.mean(delta_g[plume_indices])
+theta_m_avg = np.mean(theta_m[plume_indices])
+theta_f_avg = np.mean(theta_f[plume_indices])
+theta_g_avg = np.mean(theta_g[plume_indices])
+
+print("================ Mean profile coefficients ===============")
+print("Beta (f, p, g)")
+print(beta_f_avg, beta_p_avg, beta_g_avg)
+print("Gamma (m, f, p, g)")
+print(gamma_m_avg, gamma_f_avg, gamma_p_avg, gamma_g_avg)
+print("Delta (m, f, p, g)")
+print(delta_m_avg, delta_f_avg, delta_p_avg, delta_g_avg)
+print("Theta (m, f, g)")
+print(theta_m_avg, theta_f_avg, theta_g_avg)
 
 ##### Estimate alpha_p (plume entrainment coefficient) #####
 analytic_r = lambda z,a,z0: 6/5 * a * (z-z0) * r_0
@@ -269,6 +297,12 @@ db_bardr = np.gradient(b_bar, r_regrid)
 nu_T = -uw/dw_bardr
 D_T = -ub/db_bardr
 
+a_w2 = nu_T/np.abs(dw_bardr)
+a_b2 = D_T/np.abs(db_bardr)
+
+l_m = np.sqrt(a_w2)
+l_mb = np.sqrt(a_b2)
+
 ##### Compute invariants of anisotropy tensor ######
 e = uu + vv + ww
 b_ij = np.array([
@@ -291,11 +325,47 @@ sm = plt.cm.ScalarMappable(cmap='rainbow',
         norm=plt.Normalize(vmin=np.min(gzf[plume_indices]),vmax=np.max(gzf[plume_indices])))
 
 ##### ----------------------- #####
-#TODO improve analytic plotting
-# plot power law scalings for w_m, b_m
 
+fig0, axs = plt.subplots(1,3,figsize=(10, 6))
+if title: fig0.suptitle("Plume integral quantities Q, M, B")
+axs[0].plot(Q, gzfp/r_0, label="Thresholded")
+axs[1].plot(M, gzfp/r_0, label="Thresholded")
+axs[2].plot(F, gzfp/r_0, label="Thresholded")
+axs[0].plot(Q_full, gzfp/r_0,label="Full")
+axs[1].plot(M_full, gzfp/r_0,label="Full")
+axs[2].plot(F_full, gzfp/r_0,label="Full")
+axs[0].set_xlim(0,1.1*max(max(Q),max(Q_full)))
+axs[0].set_ylim(0,md['LZ']/r_0)
+axs[1].set_xlim(0,1.1*max(max(M),max(M_full)))
+axs[1].set_ylim(0,md['LZ']/r_0)
+axs[2].set_xlim(0,1.1*max(max(F),max(F_full)))
+axs[2].set_ylim(0,md['LZ']/r_0)
+axs[0].set_ylabel("$z/r_0$")
+axs[1].set_ylabel("$z/r_0$")
+axs[2].set_ylabel("$z/r_0$")
+nticks = 9
+ticks = np.linspace(0,md['LZ']/r_0,nticks)
+axs[0].set_yticks(ticks)
+axs[0].set_yticklabels([str(int(i)) for i in ticks])
+axs[1].set_yticks(ticks)
+axs[1].set_yticklabels([str(int(i)) for i in ticks])
+axs[2].set_yticks(ticks)
+axs[2].set_yticklabels([str(int(i)) for i in ticks])
+axs[0].legend()
+axs[1].legend()
+axs[2].legend()
+axs[0].set_title("Q, volume flux")
+axs[1].set_title("M, momentum flux")
+axs[2].set_title("F, buoyancy flux")
+plt.tight_layout()
+
+if save: fig0.savefig(save_loc+'fig0.png', dpi=300)
+
+##### ----------------------- #####
+
+# plot power law scalings for w_m, b_m
 fig1 = plt.figure()
-fig1.suptitle("Fig 1(d): numerical and analytic characteristic scales $w_m, b_m$")
+if title: fig1.suptitle("Fig 1(d): numerical and analytic characteristic scales $w_m, b_m$")
 plt.loglog(gzf/r_0,b_m/np.nanmean(b_m), color='b', label="$b_m/b_{{m0}}$")
 plt.loglog(gzf/r_0,w_m/np.nanmean(w_m), color='r', label="$w_m/w_{{m0}}$")
 plt.legend()
@@ -309,7 +379,8 @@ plt.ylim(*yrange)
 plt.xlim(4,100)
 plt.xlabel("$z/r_0$")
 
-F_0 = md['Q0'] * np.pi * r_0**2
+#F_0 = md['Q0'] * np.pi * r_0**2
+F_0 = md['b0'] * r_0**2
 w_m_analytic = 5/6 * 1/alpha_p * np.power(9/10 * alpha_p * F_0/(theta_m_avg * beta_g_avg), 1/3) * \
         np.power(gzf, -1/3)
 b_m_analytic = 5/6 * F_0/(alpha_p*theta_m_avg) * np.power(9/10 * alpha_p * F_0/(theta_m_avg * \
@@ -319,11 +390,12 @@ plt.loglog(gzf[plume_indices]/r_0, b_m_analytic[plume_indices]/np.nanmean(b_m),
         color='b',linestyle='dashed')
 plt.loglog(gzf[plume_indices]/r_0, w_m_analytic[plume_indices]/np.nanmean(w_m),
         color='r',linestyle='dashed')
+if save: fig1.savefig(save_loc+'fig1.png', dpi=300)
 
 ##### ----------------------- #####
 
 fig2, axs2 = plt.subplots(1,2, figsize=(11,5))
-fig2.suptitle("Fig 4(c),(f): self-similar profiles of $\overline{w}, \overline{b}, \overline{u'w'}, \overline{u'b'}$")
+if title: fig2.suptitle("Fig 4(c),(f): self-similar profiles of $\overline{w}, \overline{b}, \overline{u'w'}, \overline{u'b'}$")
 for i in plume_indices:
     if i == plume_indices[0]:
         axs2[0].plot(r_points/r_m[i], wbar[i]/w_m[i],color='blue',label="$\overline{w}/w_m$")
@@ -344,11 +416,12 @@ axs2[1].set_xlim(0,2)
 axs2[1].set_xlabel("$r/r_m$")
 axs2[1].legend()
 fig2.tight_layout()
+if save: fig2.savefig(save_loc+'fig2.png', dpi=300)
 
 ##### ----------------------- #####
 
 fig3, axs3 = plt.subplots(1,2,figsize=(12,5))
-fig3.suptitle("Fig 5 (a), (b): self-similar profiles of $\overline{u}, r\overline{u}$")
+if title: fig3.suptitle("Fig 5 (a), (b): self-similar profiles of $\overline{u}, r\overline{u}$")
 for i,c in zip(plume_indices,cols):
     axs3[0].plot(r_points/r_m[i], ubar[i]/w_m[i],color=c)
     axs3[1].plot(r_points/r_m[i], r_points*ubar[i]/(r_m[i]*w_m[i]), color=c)
@@ -365,11 +438,12 @@ divider = make_axes_locatable(axs3[1])
 cax = divider.append_axes('right', size='5%', pad=0.1)
 fig3.colorbar(sm, cax = cax)
 fig3.tight_layout()
+if save: fig3.savefig(save_loc+'fig3.png', dpi=300)
 
 ##### ----------------------- #####
 
 fig4 = plt.figure()
-fig4.suptitle("Fig 7(f): radial and vertical pressure gradients")
+if title: fig4.suptitle("Fig 7(f): radial and vertical pressure gradients")
 for i in plume_indices:
     if i == plume_indices[0]:
         plt.plot(r_points/r_m[i], dpbardr[i]/(w_m[i]*w_m[i]/r_m[i]), color='blue', label="$\partial \overline{p}/\partial r$")
@@ -382,11 +456,12 @@ fig4.legend()
 plt.xlim(0,2)
 plt.xlabel("$r/r_m$")
 fig4.tight_layout()
+if save: fig4.savefig(save_loc+'fig4.png', dpi=300)
 
 ##### ----------------------- #####
 
 fig5, axs5 = plt.subplots(1,3, figsize=(15,5))
-fig5.suptitle("Fig 6 (c), (f), (i): self-similar profiles of $\overline{p}, \overline{u'u'}, \overline{v'v'}, \overline{w'w'}, \overline{w'b'}, \overline{b'b'}$")
+if title: fig5.suptitle("Fig 6 (c), (f), (i): self-similar profiles of $\overline{p}, \overline{u'u'}, \overline{v'v'}, \overline{w'w'}, \overline{w'b'}, \overline{b'b'}$")
 for i,c in zip(plume_indices,cols):
     if i == plume_indices[0]:
         axs5[0].plot(r_points/r_m[i], ufluc2bar[i]/(w_m[i]*w_m[i]), color='blue',label="$\\overline{{u'u'}}/w_m^2$")
@@ -419,11 +494,12 @@ axs5[0].set_xlim(0,2)
 axs5[1].set_xlim(0,2)
 axs5[2].set_xlim(0,2)
 fig5.tight_layout()
+if save: fig5.savefig(save_loc+'fig5.png', dpi=300)
 
 ##### ----------------------- #####
 
 fig6 = plt.figure()
-plt.title("NEED TITLE")
+if title: plt.title("Fig 12 (b): radial profiles of $\\nu_T$ and $D_T$")
 plt.plot(r_regrid, nu_T, color='b', label="$\\nu_T$")
 plt.plot(r_regrid, D_T, linestyle='--', color='r', label="$D_T$")
 plt.ylim(0,0.1)
@@ -431,13 +507,14 @@ plt.xlim(0,1.5)
 plt.ylabel("$\\nu_T, D_T$ normalised")
 plt.xlabel("$r/r_m$")
 plt.legend()
+if save: fig6.savefig(save_loc+'fig6.png', dpi=300)
 
 ##### ----------------------- #####
 # display threshold radius, theoretical radius w/ MvR et al coefficient, non-dimensionalised radius
 
 wbar_plot = wbar_trunc[plume_indices]
 fig7 = plt.figure(figsize=(4,8))
-fig7.suptitle("Fig 1(a): ensemble and azimuthally \n averaged plume with radii scales")
+if title: fig7.suptitle("Fig 1(a): ensemble and azimuthally \n averaged plume with radii scales")
 plt.imshow(np.flip(wbar_plot,axis=0),cmap='jet',extent=[0, md['LX']/(2*r_0), np.min(gzf[plume_indices])/r_0,
     np.max(gzf[plume_indices])/r_0])
 plt.plot([i/r_0 for i in r_d], gzf[plume_indices]/r_0, color='r',label="threshold radius")
@@ -451,12 +528,12 @@ plt.legend()
 plt.xlabel("$r/r_0$")
 plt.ylabel("$z/r_0$")
 plt.tight_layout()
+if save: fig7.savefig(save_loc+'fig7.png', dpi=300)
 
 ##### ----------------------- #####
 # estimate flux balance parameter
 fig8 = plt.figure()
-fig8.suptitle("Fig 2(a): flux balance \
-        parameter $\\Gamma = 5FQ^2 / 8\\beta_g \\alpha_p \\theta_m M^{{5/2}}$")
+if title: fig8.suptitle("Fig 2(a): flux balance parameter $\\Gamma = 5FQ^2 / 8\\beta_g \\alpha_p \\theta_m M^{{5/2}}$")
 plt.ylabel("$z/r_0$")
 plt.xlabel("$\\Gamma$")
 plt.plot(Gamma[plume_indices], gzf[plume_indices]/r_0)
@@ -465,12 +542,13 @@ plt.plot([1,1],[np.min(gzf[plume_indices])/r_0, np.max(gzf[plume_indices])/r_0],
     linestyle='dashed', color='k')
 plt.ylim(np.min(gzf[plume_indices])/r_0, np.max(gzf[plume_indices])/r_0)
 plt.tight_layout()
+if save: fig8.savefig(save_loc+'fig8.png', dpi=300)
 
 ##### ----------------------- #####
 # analytic alpha (entrainment coefficient)
 
 fig9 = plt.figure()
-fig9.suptitle("Fig 2(b): theoretical and numerical entrainment coefficient")
+if title: fig9.suptitle("Fig 2(b): theoretical and numerical entrainment coefficient")
 plt.ylabel("$z/r_0$")
 plt.xlabel("$\\alpha$")
 plt.plot(alpha, zplot/r_0)
@@ -479,12 +557,13 @@ plt.plot([alpha_p]*(len(zplot)), zplot/r_0, color='black', linestyle='dashed',
 plt.legend()
 plt.ylim(np.min(gzf[plume_indices])/r_0, np.max(gzf[plume_indices])/r_0)
 plt.xlim(0,0.2)
+if save: fig9.savefig(save_loc+'fig9.png', dpi=300)
 
 ##### ----------------------- #####
 # plots of beta_m, gamma_m, delta_m, theta_m vs z/r_0
 
 fig10, ax10 = plt.subplots(1,3,figsize=(12,5))
-fig10.suptitle("Fig 9(c): mean profile coefficients")
+if title: fig10.suptitle("Fig 9(c): mean profile coefficients")
 ax10[0].set_xlim(-0.6, 1.4)
 ax10[0].set_ylim(np.min(gzf[plume_indices])/r_0, np.max(gzf[plume_indices])/r_0)
 ax10[0].set_ylabel("$z/r_0$")
@@ -526,11 +605,12 @@ ax10[2].plot(beta_p[plume_indices],gzf[plume_indices]/r_0, color='b',
         label="$\\beta_p$")
 ax10[2].legend()
 plt.tight_layout()
+if save: fig10.savefig(save_loc+'fig10.png', dpi=300)
 
 ##### ----------------------- #####
 
 fig11 = plt.figure()
-plt.title("Fig 9(f): relative contribution of turbulence and pressure")
+if title: plt.title("Fig 9(f): relative contribution of turbulence and pressure")
 plt.xlim(-0.3, 0.3)
 plt.xlabel("$r/r_m$")
 plt.ylabel("$z/r_0$")
@@ -544,6 +624,7 @@ plt.plot(((theta_g-theta_m)/theta_m)[plume_indices], gzf[plume_indices]/r_0, col
         linestyle='-.',label="$(\\theta_g-\\theta_m)/\\theta_m$")
 plt.legend()
 plt.tight_layout()
+if save: fig11.savefig(save_loc+'fig11.png', dpi=300)
 
 ##### ----------------------- #####
 
@@ -557,9 +638,10 @@ plt.plot(alpha_prod+alpha_Ri+alpha_shape, gzf[plume_indices], color="purple", li
         #alpha=0.5)
 plt.ylabel("$z/r_0$")
 plt.scatter(alpha, zplot, color="purple")
-plt.title("Contribution to entrainment coefficient from TKE production $\\alpha_{{prod}}$, \n \
+if title: plt.title("Fig 10: contribution to entrainment coefficient from TKE production $\\alpha_{{prod}}$, \n \
 buoyancy $\\alpha_\\mathrm{{Ri}}$ and departure from self-similarity $\\alpha_{{shape}}$")
 plt.legend()
+if save: fig12.savefig(save_loc+'fig12.png', dpi=300)
 
 ##### ----------------------- #####
 
@@ -575,7 +657,8 @@ ax13[1].set_xlabel("$r/r_m$")
 ax13[1].set_ylabel("$\\eta$")
 ax13[1].set_xlim(0,2)
 ax13[1].set_ylim(0,1/6)
-fig13.suptitle("Dependence of $\\xi, \\eta$ on $r/r_m$")
+if title: fig13.suptitle("Fig 8 (b), (c): dependence of $\\xi, \\eta$ on $r/r_m$")
+if save: fig13.savefig(save_loc+'fig13.png', dpi=300)
 
 ##### ----------------------- #####
 
@@ -601,7 +684,21 @@ plt.xlabel("$\\xi$")
 plt.ylabel("$\\eta$")
 plt.xlim(-1/6, 1/3)
 plt.ylim(0, 1/3)
-plt.title("Invariants of the isotropy tensor in $\\xi-\\eta$ space with Lumley triangle")
+if title: plt.title("Fig 8 (a): invariants of the anisotropy tensor\n in $\\xi-\\eta$ space with Lumley triangle")
 plt.tight_layout()
+if save: fig14.savefig(save_loc+'fig14.png', dpi=300)
 
-plt.show()
+##### ----------------------- #####
+fig15 = plt.figure()
+if title: plt.title("Fig 12 (b): radial profiles of radial mixing lengths")
+plt.plot(r_regrid, l_m, color='b', label="$l_m$")
+plt.plot(r_regrid, l_mb, linestyle='--', color='r', label="$l_{mb}$")
+plt.ylim(0,0.3)
+plt.xlim(0,1.5)
+plt.ylabel("$l_m, l_{mb}$ normalised")
+plt.xlabel("$r/r_m$")
+plt.legend()
+#plt.grid(color='grey', alpha=0.5)
+if save: fig15.savefig(save_loc+'fig15.png', dpi=300)
+
+if show: plt.show()

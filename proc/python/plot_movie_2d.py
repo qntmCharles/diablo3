@@ -4,14 +4,14 @@ import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.animation as animation
 from datetime import datetime
-from functions import get_metadata, read_params
+from functions import get_metadata, read_params, get_grid
 
 ##### USER DEFINED VARIABLES #####
 
 params_file = "./params.dat"
 var1 = 'b_az'
-var2 = 'w_az'
-var3 = 'u_az'
+var2 = 'uw_sfluc'
+var3 = 'ub_sfluc'
 save = False
 
 ##### ---------------------- #####
@@ -23,6 +23,8 @@ print(save_dir)
 
 # Get simulation metadata
 md = get_metadata(run_dir, version)
+
+gxf, gyf, gzf, dz = get_grid(save_dir+'grid.h5', md)
 
 print("Complete metadata: ", md)
 
@@ -43,13 +45,14 @@ with h5py.File(save_dir+"/az_stats.h5", 'r') as f:
 data1 = np.flip(data1,axis=1)
 data2 = np.flip(data2,axis=1)
 data3 = np.flip(data3,axis=1)
+#data1 = np.gradient(np.gradient(data1, np.flip(gzf), axis=1), times, axis=0)
 
 print(data3[0,0,:])
 
 print("Total time steps: %s"%NSAMP)
 print("Dimensional times: ",times)
 
-fig, ax = plt.subplots(1,3)
+fig, ax = plt.subplots(1,3, figsize=(12, 5))
 init_clim = 0.02
 ims = np.array([None,None,None])
 cb = np.array([None,None,None])
@@ -74,8 +77,10 @@ cb[0] = plt.colorbar(ims[0],ax=ax[0])
 cb[1] = plt.colorbar(ims[1],ax=ax[1])
 cb[2] = plt.colorbar(ims[2],ax=ax[2])
 ims[0].set_clim(0, 0.1)
-#ims[1].set_clim(0, 0.1)
-#ims[2].set_clim(0, 0.1)
+#ims[1].set_clim(-0.2, 0.4)
+#ims[2].set_clim(-0.01, 0.01)
+ims[1].set_clim(-1e-9, 1e-9)
+ims[2].set_clim(-1e-9, 1e-9)
 
 fig.suptitle("time = 0 mins")
 ax[0].set_ylabel("$z$")
@@ -87,7 +92,6 @@ ax[1].set_title(var2)
 ax[2].set_ylabel("$z$")
 ax[2].set_xlabel("$x$")
 ax[2].set_title(var3)
-plt.tight_layout()
 
 def animate(step):
     ims[0].set_data(data1[step])
@@ -106,6 +110,8 @@ writer = Writer(fps=20, bitrate=1800)
 
 print("Starting plot...")
 anim = animation.FuncAnimation(fig, animate, interval=50, frames=NSAMP)
+plt.tight_layout()
+plt.subplots_adjust(wspace=0.3,hspace=0)
 now = datetime.now()
 
 if save:

@@ -15,30 +15,41 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 ##### USER-DEFINED PARAMETERS #####
 params_file = "./params.dat"
 
-z_upper = 70 # non-dim, scaled by r_0
-z_lower = 20
+z_upper = 50 # non-dim, scaled by r_0
+z_lower = 5
 
 eps = 0.02
 nplots = 5
 
 ##### ----------------------- #####
 
-def truncate(var, points, ref_var, ref, trunc_indices):
+def ranges(nums):
+    nums = sorted(set(nums))
+    gaps = [[s, e] for s, e in zip(nums, nums[1:]) if s+1 < e]
+    edges = iter(nums[:1] + sum(gaps, []) + nums[-1:])
+    return list(zip(edges, edges))
+
+def truncate(var, points, ref_var, ref, trunc_indices, display=False):
     # Truncates var at location where ref_var matches ref, computing only at trunc_indices
     # ASSUMES ref_var is decreasing with increasing index
     # Points are the positions of each entry of var
     var_new = np.zeros(shape=(var.shape[0], var.shape[1]+2))
     for i in trunc_indices:
         # Calculate index up to which var is unchanged, after which set to 0
-        trunc_idx = max(np.where(ref_var[i,:] > ref[i])[0])
+        trunc_idx = ranges(np.where(ref_var[i,:] > ref[i])[0])[0][-1]
         var_new[i, :trunc_idx+1] = var[i, :trunc_idx+1]
 
         # Calculate exact point to interpolate
-        f = interpolate.interp1d(ref_var[i], points)
+        ref_var_interp = ref_var[i, trunc_idx:trunc_idx+2]
+        points_interp = points[trunc_idx:trunc_idx+2]
+        f = interpolate.interp1d(ref_var_interp, points_interp)
         trunc_pt = f(ref[i])
 
         # Create interpolation function for var
-        f = interpolate.interp1d(points, var[i])
+        points_interp = points[trunc_idx:trunc_idx+2]
+        var_interp = var[i,trunc_idx:trunc_idx+2]
+
+        f = interpolate.interp1d(points_interp, var_interp)
         var_new[i, trunc_idx+1] = f(trunc_pt)
 
     return var_new
@@ -64,7 +75,6 @@ r_bins = np.array([r*dr for r in range(0, nbins+1)])
 r_points = np.array([0.5*(r_bins[i]+r_bins[i+1]) for i in range(nbins)])
 
 ##### Get azimuthal data #####
-############################ TODO: check this works okay with very large data files
 data = get_az_data(join(save_dir,'az_stats.h5'), md)
 
 ubar = data['u']
@@ -83,7 +93,7 @@ with h5py.File(save_dir+'az_stats.h5', 'r') as f:
     cols = plt.cm.rainbow(np.linspace(1,0,len(time_keys)))
     for t,c in zip(time_keys,cols):
         data = b[t][()]
-        plt.loglog(data[:,0],gzf,color=c,alpha=0.5)
+        plt.plot(data[:,0],gzf,color=c,alpha=0.5)
 
 ##### Identify indices where plume is well defined #####
 
@@ -114,14 +124,27 @@ cont_plume_indices = list(set(list(sum(max([list(y) for i, y in groupby(zip(plum
 r_d = []
 wbar_trunc = np.zeros(shape=(wbar.shape[0],wbar.shape[1]+2))
 r_integrate = np.zeros(shape=(wbar.shape[0],wbar.shape[1]+2))
-for i in plume_indices:
-    w_trunc = eps*wbar[i,0]
-    r_trunc = max(np.where(wbar[i,:] > wtrunc)[0])
+for i in cont_valid_indices:
+    wtrunc = eps*wbar[i,0]
+    try:
+        rtrunc = ranges(np.where(wbar[i,:] > wtrunc)[0])[0][-1]
+    except ValueError:
+        cont_valid_indices.remove(i)
+        continue
 
     wbar_trunc[i, :rtrunc+1] = wbar[i, :rtrunc+1]
     wbar_trunc[i, rtrunc+1] = wtrunc
 
-    f = interpolate.interp1d(wbar[i], r_points)
+    # Edge cases
+    if rtrunc == int(md['Nx']/2)-1:
+        wtrunc = wbar[i,-1]
+    if rtrunc == 0:
+        wtrunc = wbar[i, 0]
+
+    wbar_interp = wbar[i, rtrunc:rtrunc+2]
+    r_interp = r_points[rtrunc:rtrunc+2]
+
+    f = interpolate.interp1d(wbar_interp, r_interp)
     r_d.append(f(wtrunc))
     r_integrate[i, :rtrunc+1] = r_points[:rtrunc+1]
     r_integrate[i, rtrunc+1] = f(wtrunc)
@@ -139,8 +162,8 @@ B = 2*integrate.trapezoid(bbar_trunc*r_integrate, r_integrate, axis=1)
 r_m = Q/np.sqrt(M)
 b_m = B/(r_m*r_m)
 
-plt.loglog(2*b_m, gzf, label="$B/r_m^2$",color='r')
-plt.loglog(bbar[:,0], gzf, color='k', linestyle='--', label="b centreline")
+plt.plot(2*b_m, gzf, label="$B/r_m^2$",color='r')
+plt.plot(bbar[:,0], gzf, color='k', linestyle='--', label="b centreline")
 fig1.legend()
 
 # Plot sample gradients over b profiles
@@ -149,9 +172,10 @@ x_split = np.log((x_range[1]-x_range[0])*2)
 y_range = plt.gca().get_ylim()
 print(x_range)
 for i in range(-10,10):
-    plt.loglog(np.exp(x_split*i+np.log(gzf[-1]))*np.power(gzf, -5/3), gzf, alpha=0.7, color='grey')
+    plt.plot(np.exp(x_split*i+np.log(gzf[-1]))*np.power(gzf, -5/3), gzf, alpha=0.7, color='grey')
 
-plt.xlim(np.min(bbar[:,0])-0.1*(np.max(bbar[:,0])-np.min(bbar[:,0])),1.5*np.max(bbar[:,0]))
+#plt.xlim(np.min(bbar[:,0])-0.1*(np.max(bbar[:,0])-np.min(bbar[:,0])),1.5*np.max(bbar[:,0]))
+plt.xscale('log')
 plt.ylim(gzf[0]+0.2*(gzf[-1]-gzf[0]),gzf[-1])
 plt.show()
 

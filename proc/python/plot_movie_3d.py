@@ -27,7 +27,7 @@ with h5py.File(save_dir+"/movie.h5", 'r') as f:
     print(time_keys)
     # Get buoyancy data
     th1_xy = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
-    th1_zy = np.array([np.array(f['th1_yz'][t]) for t in time_keys])
+    th1_zy = np.array([np.array(f['th2_xz'][t]) for t in time_keys])
     NSAMP = len(th1_xy)
     times = np.array([float(t)*md['SAVE_MOVIE_DT'] for t in time_keys])
     f.close()
@@ -40,7 +40,6 @@ print("Dimensional times: ",times)
 
 print("Setting up data arrays...")
 fig, axs = plt.subplots(1,2,figsize=(15, 10))
-init_clim = 0.02
 ims = np.array([None,None])
 cb = np.array([None,None])
 
@@ -51,13 +50,13 @@ ims[1] = axs[1].imshow(th1_zy[0], cmap='jet', interpolation='bicubic', animated=
         extent=[0,md['LY'],0,md['LZ']])
 
 # Add forcing level
-axs[0].axhline(md['Lyc']+md['Lyp'],color='white')
-axs[1].axhline(md['Lyc']+md['Lyp'],color='white')
+axs[0].axhline(md['Lyc']+md['Lyp'],color='white', linestyle=':')
+axs[1].axhline(md['Lyc']+md['Lyp'],color='white', linestyle=':')
 
 cb[0] = plt.colorbar(ims[0],ax=axs[0])
 cb[1] = plt.colorbar(ims[1],ax=axs[1])
-ims[0].set_clim(0, 0.1)
-ims[1].set_clim(0, 0.1)
+ims[0].set_clim(0, 0.5)
+#ims[1].set_clim(0, 1e-5)
 
 fig.suptitle("$\\theta_1$, time = 0 hours")
 axs[0].set_ylabel("$z$")
@@ -73,11 +72,11 @@ def animate(step):
     return ims.flatten(),
 
 print("Initialising mp4 writer...")
-#Writer = animation.writers['ffmpeg']
-#writer = Writer(fps=20, bitrate=1800)
+Writer = animation.writers['ffmpeg']
+writer = Writer(fps=20, bitrate=1800)
 
 print("Starting plot...")
 anim = animation.FuncAnimation(fig, animate, interval=20, frames=NSAMP)
 now = datetime.now()
-#anim.save(base_dir+save_dir+'plume%s.mp4'%now.strftime("%d-%m-%Y-%H-%m"),writer=writer)
+#anim.save(save_dir+'fountain%s.mp4'%now.strftime("%d-%m-%Y-%H-%m"),writer=writer)
 plt.show()

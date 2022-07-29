@@ -21,10 +21,18 @@ def read_params(param_file):
 def get_metadata(run_dir, version):
     md = {}
 
-    if version == "3.5":
-        params = ["LX", "LY", "LZ", "RE", "SAVE_MOVIE_DT", "SAVE_STATS_DT", "SAVE_FLOW_DT"]
-        chan_params = ["r0", "alpha_e", "Q0", "Lyc", "Lyp"]
-        grid_params = ["Nx", "Ny", "Nz", "Nth"]
+    #if version == "3.5":
+        #params = ["LX", "LY", "LZ", "RE", "SAVE_MOVIE_DT", "SAVE_STATS_DT", "SAVE_FLOW_DT"]
+        #chan_params = ["r0", "alpha_e", "Q0", "Lyc", "Lyp"]
+        #grid_params = ["Nx", "Ny", "Nz", "Nth"]
+    #if version == "3.6":
+        #params = ["LX", "LY", "LZ", "RE", "SAVE_MOVIE_DT", "SAVE_STATS_DT", "SAVE_FLOW_DT"]
+        #chan_params = ["r0", "alpha_e", "b0", "Lyc", "Lyp"]
+        #grid_params = ["Nx", "Ny", "Nz", "Nth"]
+    #if version == "3.7":
+    params = ["LX", "LY", "LZ", "RE", "SAVE_MOVIE_DT", "SAVE_STATS_DT", "SAVE_FLOW_DT", "VERSION"]
+    chan_params = ["r0", "alpha_e", "b0", "Lyc", "Lyp", "S_depth", "N2", "H", "Q0"]
+    grid_params = ["Nx", "Ny", "Nz", "Nth"]
 
     for params_file, parameters in zip(["/input.dat", "/input_chan.dat"],[params,chan_params]):
         with open(run_dir+params_file, 'r') as f:
@@ -140,23 +148,26 @@ def get_az_data(data_file, md):
         bb_sfluc_bar = bb_sfluc[time_keys[0]][()]*md['SAVE_STATS_DT']
 
         # Compute sum
-        for t_key in time_keys[1:]:
-            print("Computing t = {0:.4f}".format(u_az[t_key].attrs['Time']))
-            ubar += u_az[t_key][()]*md['SAVE_STATS_DT']
-            vbar += v_az[t_key][()]*md['SAVE_STATS_DT']
-            wbar += w_az[t_key][()]*md['SAVE_STATS_DT']
-            bbar += b_az[t_key][()]*md['SAVE_STATS_DT']
-            pbar += p_az[t_key][()]*md['SAVE_STATS_DT']
+        for i in range(1,len(time_keys)):
+            t_key = time_keys[i]
+            dt = u_az[t_key].attrs['Time'] - u_az[time_keys[i-1]].attrs['Time']
 
-            uu_sfluc_bar += uu_sfluc[t_key][()]*md['SAVE_STATS_DT']
-            uv_sfluc_bar += uv_sfluc[t_key][()]*md['SAVE_STATS_DT']
-            uw_sfluc_bar += uw_sfluc[t_key][()]*md['SAVE_STATS_DT']
-            ub_sfluc_bar += ub_sfluc[t_key][()]*md['SAVE_STATS_DT']
-            vv_sfluc_bar += vv_sfluc[t_key][()]*md['SAVE_STATS_DT']
-            vw_sfluc_bar += vw_sfluc[t_key][()]*md['SAVE_STATS_DT']
-            ww_sfluc_bar += ww_sfluc[t_key][()]*md['SAVE_STATS_DT']
-            wb_sfluc_bar += wb_sfluc[t_key][()]*md['SAVE_STATS_DT']
-            bb_sfluc_bar += bb_sfluc[t_key][()]*md['SAVE_STATS_DT']
+            print("Computing t = {0:.4f}".format(u_az[t_key].attrs['Time']))
+            ubar += u_az[t_key][()]*dt
+            vbar += v_az[t_key][()]*dt
+            wbar += w_az[t_key][()]*dt
+            bbar += b_az[t_key][()]*dt
+            pbar += p_az[t_key][()]*dt
+
+            uu_sfluc_bar += uu_sfluc[t_key][()]*dt
+            uv_sfluc_bar += uv_sfluc[t_key][()]*dt
+            uw_sfluc_bar += uw_sfluc[t_key][()]*dt
+            ub_sfluc_bar += ub_sfluc[t_key][()]*dt
+            vv_sfluc_bar += vv_sfluc[t_key][()]*dt
+            vw_sfluc_bar += vw_sfluc[t_key][()]*dt
+            ww_sfluc_bar += ww_sfluc[t_key][()]*dt
+            wb_sfluc_bar += wb_sfluc[t_key][()]*dt
+            bb_sfluc_bar += bb_sfluc[t_key][()]*dt
 
         ubar /= t_run
         vbar /= t_run
@@ -199,22 +210,25 @@ def get_az_data(data_file, md):
         bb_tfluc_bar = b_tfluc*b_tfluc*md['SAVE_STATS_DT']
 
         # Compute sum
-        for t_key in time_keys[1:]:
+        for i in range(1,len(time_keys)):
+            t_key = time_keys[i]
+            dt = u_az[t_key].attrs['Time'] - u_az[time_keys[i-1]].attrs['Time']
+
             print("Computing t = {0:.4f}".format(u_az[t_key].attrs['Time']))
             u_tfluc = u_az[t_key][()] - ubar
             v_tfluc = v_az[t_key][()] - vbar
             w_tfluc = w_az[t_key][()] - wbar
             b_tfluc = b_az[t_key][()] - bbar
 
-            uu_tfluc_bar += u_tfluc*u_tfluc*md['SAVE_STATS_DT']
-            uv_tfluc_bar += u_tfluc*v_tfluc*md['SAVE_STATS_DT']
-            uw_tfluc_bar += u_tfluc*w_tfluc*md['SAVE_STATS_DT']
-            ub_tfluc_bar += u_tfluc*b_tfluc*md['SAVE_STATS_DT']
-            vv_tfluc_bar += v_tfluc*v_tfluc*md['SAVE_STATS_DT']
-            vw_tfluc_bar += v_tfluc*w_tfluc*md['SAVE_STATS_DT']
-            ww_tfluc_bar += w_tfluc*w_tfluc*md['SAVE_STATS_DT']
-            wb_tfluc_bar += w_tfluc*b_tfluc*md['SAVE_STATS_DT']
-            bb_tfluc_bar += b_tfluc*b_tfluc*md['SAVE_STATS_DT']
+            uu_tfluc_bar += u_tfluc*u_tfluc*dt
+            uv_tfluc_bar += u_tfluc*v_tfluc*dt
+            uw_tfluc_bar += u_tfluc*w_tfluc*dt
+            ub_tfluc_bar += u_tfluc*b_tfluc*dt
+            vv_tfluc_bar += v_tfluc*v_tfluc*dt
+            vw_tfluc_bar += v_tfluc*w_tfluc*dt
+            ww_tfluc_bar += w_tfluc*w_tfluc*dt
+            wb_tfluc_bar += w_tfluc*b_tfluc*dt
+            bb_tfluc_bar += b_tfluc*b_tfluc*dt
 
         uu_tfluc_bar /= t_run
         uv_tfluc_bar /= t_run
