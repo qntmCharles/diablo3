@@ -42,7 +42,7 @@ module parameters
   real(rkind) dWdX ! Background vorticity
 
 
-  integer     IC_type, f_type
+  integer     IC_type, f_type, turb_type
   logical     physical_noise
   logical     homogeneousX
 
@@ -65,9 +65,14 @@ module parameters
   integer les_model_type
 
   ! Plume parameters
-  real(rkind) R0, alpha_e, LYC, LYP, Q0, F0, zvirt
-  integer jpert
+  real(rkind) R0, alpha_e, LYC, LYP, b0, F0, zvirt, N2, H
+  integer jpert, test_rank
 
+  ! Sponge parameters
+  real (rkind) Svel_amp, Sb_amp, S_depth
+
+  ! Forcing parameters
+  real (rkind) tau_sponge
 
   ! Timestep memory
   real(rkind) TIME_LAST
@@ -93,7 +98,7 @@ contains
     !   (Note - if you change the following section of code, update the
     !    CURRENT_VERSION number to make obsolete previous input files !)
 
-    current_version = 3.5
+    current_version = 3.6
     read (11, *)
     read (11, *)
     read (11, *)
@@ -140,7 +145,9 @@ contains
     inquire (file="start.h5", exist=start_file_exists)
     if (start_file_exists) then
       create_new_flow = .false.
-      create_new_th(1) = .false.
+      do n = 1, N_th
+        create_new_th(n) = .false.
+      end do
     end if
 
 
@@ -161,10 +168,19 @@ contains
     end if
 
     ! Now plume variables read, set perturbation level
-    jpert = 0
-    do while (gy(jpert) < Lyc+Lyp)
-      jpert = jpert + 1
-    end do
+    ! Find rank
+    test_rank = -1
+    if ((Lyc+Lyp < gy(Nyp)) .and. (gy(0) < Lyc+Lyp)) then
+      test_rank = rankY
+      write(*,*) test_rank
+    end if
+
+    if (rankY == test_rank) then
+      jpert = 0
+      do while (gy(jpert) < Lyc+Lyp)
+        jpert = jpert + 1
+      end do
+    end if
 
     if (rank == 0) &
       write (*, '("Use LES: " L1)') use_LES
@@ -214,7 +230,7 @@ contains
     open (11, file='input_chan.dat', form='formatted', status='old')
     ! Read input file.
 
-    current_version = 3.5
+    current_version = 3.6
     read (11, *)
     read (11, *)
     read (11, *)
@@ -238,11 +254,13 @@ contains
     !read (11, *)
     read (11, *) grav_x, grav_z, grav_y
     read (11, *)
-    read (11, *) f_type, ubulk0, px0, omega0, amp_omega0, force_start
+    read (11, *) f_type, ubulk0, px0, omega0, amp_omega0, force_start, turb_type, tau_sponge
     read (11, *)
-    read (11, *) r0, alpha_e, Q0
+    read (11, *) r0, alpha_e, b0
     read (11, *)
-    read (11, *) Lyc, Lyp
+    read (11, *) Lyc, Lyp, H, N2
+    read (11, *)
+    read (11, *) Svel_amp, Sb_amp, S_depth
     read (11, *)
     read (11, *)
     read (11, *) u_BC_Ymin, u_BC_Ymin_c1
@@ -266,9 +284,13 @@ contains
     end do
 
     if (rank == 0) write (*, '("Ro Inverse = " ES26.18)') Ro_inv
+    do n = 1, N_th
+      if (rank == 0) write (*,*) 'dTHdX', dTHdX(n)
+      if (rank == 0) write (*,*) 'dTHdZ', dTHdZ(n)
+    end do
 
     zvirt = -r0/(1.2d0 * alpha_e)
-    F0 = 4.d0*atan(1.d0) * (r0**2.d0) * Q0
+    F0 = (r0**2.d0) * b0
 
 
     ! Compensate no-slip BC in the GS flow direction due to dTHdx

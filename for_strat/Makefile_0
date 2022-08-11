@@ -4,8 +4,9 @@ COMPILER = ifort
 
 # Target Architecture (Otherwise use -xHost)
 # 	Skylake:	-xCORE-AVX512
-# 	KNL: 			-xMIC-AVX512
-TARGET_ARCH = #-xMIC-AVX512
+# 	KNL: 		-xMIC-AVX512
+#       Other:		-xHost
+TARGET_ARCH = -xMIC-AVX512
 
 # Libraries to Link
 LDFLAGS =
@@ -14,7 +15,7 @@ LDFLAGS =
 INCLUDES =
 
 # Compiler Options
-FCFLAGS = -O3 -ipo -xHost  # HPC
+FCFLAGS = -O3 -ipo # HPC
 #FCFLAGS = -O0 -g -check all -traceback -debug extended # Debug
 
 

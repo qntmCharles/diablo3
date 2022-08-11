@@ -9,11 +9,11 @@ module flow
   ! Flow !
 
   ! 3D
-  real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1,s2,s3,s4,s5, &
+  real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1,s2,s3,s4,s5, s6, &
                                                            ur, utheta, u_sfluc, v_sfluc, w_sfluc, b_sfluc
   complex(rkind), pointer, contiguous, dimension(:,:,:) :: cu1,cu2,cu3,cp,cr1,cr2,cr3,cf1,cf2,cf3, &
-                                                           cs1,cs2,cs3,cs4, cs5, cur, cutheta, cu_sfluc, cv_sfluc, &
-                                                           cw_sfluc, cb_sfluc
+                                                           cs1,cs2,cs3,cs4, cs5, cs6, cur, cutheta, cu_sfluc, &
+                                                           cv_sfluc, cw_sfluc, cb_sfluc
 
   ! 4D
   real(rkind), pointer, contiguous, dimension(:,:,:,:) :: th,fth,rth
@@ -192,6 +192,7 @@ contains
     call alloc_array3D(s3,cs3)
     call alloc_array3D(s4,cs4)
     call alloc_array3D(s5,cs5)
+    call alloc_array3D(s6,cs6)
 
     call alloc_array3D(ur,cur)
     call alloc_array3D(utheta,cutheta)
@@ -411,6 +412,17 @@ contains
           end do
         end do
       end do
+    else if (IC_type >= 9) then
+      ! Quiescent
+      do j = 0, Nyp
+        do k = 0, Nzp - 1
+          do i = 0, Nxm1
+            u1(i, k, j) = 0.d0
+            u2(i, k, j) = 0.d0
+            u3(i, k, j) = 0.d0
+          end do
+        end do
+      end do
     else
       write (*, '("Warning, unsupported IC_type in create_flow.")')
     end if
@@ -579,6 +591,7 @@ contains
 
 
     integer i, j, k, n
+    real(rkind) ttop, tmid
 
     do n = 1, N_th
       if (create_new_th(n)) then
@@ -658,7 +671,7 @@ contains
               end do
             end do
           end do
-        else if (IC_TYPE == 9) then
+        else if (IC_type == 9) then
         ! Quiescent IC
         do k = 0, Nzp - 1
           do i = 0, Nxm1
@@ -667,15 +680,67 @@ contains
             end do
           end do
         end do
-        ! Stratification matching Ansong & Sutherland (2010) experiment
-        else if (IC_TYPE == 10) then
+        else if (IC_type == 10) then
+        ! Stratification matching Ansong & Sutherland (2010) experiment, no initial tracer
         do k = 0, Nzp - 1
           do i = 0, Nxm1
             do j = 1, Nyp
-              if (gyf(j) < 15.d-2) then
+              if (gyf(j) < H) then
                 th(i, k, j, n) = 0.d0
+              else if (n == 1) then !only want buoyancy to have stratification
+                th(i, k, j, n) = N2 * (gyf(j) - H)
               else
-                th(i, k, j, n) = 175.d-2 * (gyf(j) - 15.d-2)
+                th(i, k, j, n) = 0.d0
+              end if
+            end do
+          end do
+        end do
+        else if (IC_type == 11) then
+        ! Stratification matching Ansong & Sutherland (2010) experiment, fixed initial tracer
+        do k = 0, Nzp - 1
+          do i = 0, Nxm1
+            do j = 1, Nyp
+              if (n==1) then 
+                if (gyf(j) < H) then
+                  th(i, k, j, n) = 0.d0
+                else 
+                  th(i, k, j, n) = N2 * (gyf(j) - H)
+                end if
+              else if (n==2) then
+                if (gyf(j) < H) then
+                  th(i, k, j, n) = 0.1d0
+                else
+                  th(i, k, j, n) = 0.d0
+                end if 
+              end if
+            end do
+          end do
+        end do
+        else if (IC_type == 12) then
+        ! Stratification matching Ansong & Sutherland (2010) experiment, two tracers
+        ttop = 0.35d0
+        tmid = 0.3d0
+        do k = 0, Nzp - 1
+          do i = 0, Nxm1
+            do j = 1, Nyp
+              if (n==1) then 
+                if (gyf(j) < H) then
+                  th(i, k, j, n) = 0.d0
+                else 
+                  th(i, k, j, n) = N2 * (gyf(j) - H)
+                end if
+              else if (n==2) then
+                th(i, k, j, n) = 0.d0
+              else if (n==3) then
+                if (gyf(j) < H) then
+                  th(i, k, j, n) = 0.d0
+                else if (gyf(j) < tmid) then
+                  th(i, k, j, n) = (gyf(j) - H)
+                else if (gyf(j) < ttop) then
+                  th(i, k, j, n) = ((tmid-H)/(ttop-tmid)) * (ttop - gyf(j))
+                else
+                  th(i, k, j, n) = 0.d0
+                end if 
               end if
             end do
           end do
@@ -802,8 +867,10 @@ subroutine courant
   end if
   ! Make sure that we capture the buoyancy period (for stratified flows)
   do n = 1, N_th
-    Nmax = sqrt(abs(th_BC_Ymax_c1(n)))
+    if (Ri(n) /= 0.d0) then
+    Nmax = sqrt(abs(Ri(n)*th_BC_Ymax_c1(n)))
     dt = min(dt, 0.1 * 2.d0 * pi / Nmax)
+    end if
   end do
 
   ! Make sure we capture the Geostrophic Flow-through time
@@ -818,10 +885,10 @@ subroutine courant
       do j = jstart, jend
         do k = 0, Nzp - 1
           do i = 0, Nxm1
-            dt_x = CFL * dx(i) / abs(u1(i, k, j) - dTHdZ(n) &
+            dt_x = CFL * dx(i) / abs(u1(i, k, j) - dTHdZ(n) * Ri(n) &
                                      * gyf(j) / (Ro_inv / delta))
             dt_y = CFL * dy(j) / abs(u2(i, k, j))
-            dt_z = CFL * dz(k) / abs(u3(i, k, j) + (1.d0 / (Ro_inv / delta)) &
+            dt_z = CFL * dz(k) / abs(u3(i, k, j) + (Ri(n) / (Ro_inv / delta)) &
                                      * dTHdX(n) * (gyf(j) - 0.5d0*Ly))
             dt = min(dt, dt_x, dt_y, dt_z)
           end do
@@ -870,6 +937,8 @@ subroutine courant
   else
     delta_t = dt
   end if
+  
+  if (rank == 0) write (*,*) delta_t
 
   ! if (time + delta_t > save_stats_time) then
   !   delta_t = save_stats_time - time + 1.d-14
