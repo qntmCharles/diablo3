@@ -101,7 +101,8 @@ if plot_max == -1: print("Warning: plot_max miscalculated")
 
 bbins = np.linspace(b_min, b_max, nbins)
 bbins_data = check_data[plot_min:plot_max]
-bbins_data = np.append(bbins_data, bbins[-1])
+bbins_data = bbins_data[::2]
+#bbins_data = np.append(bbins_data, bbins[-1])
 
 print(np.append(times, times[-1]+md['SAVE_STATS_DT']))
 X, Y = np.meshgrid(np.append(times, times[-1]+md['SAVE_STATS_DT']), bbins)
@@ -117,13 +118,15 @@ dz = gzf[1+plot_min:plot_max] - gzf[plot_min:plot_max-1]
 cols = plt.cm.rainbow(np.linspace(0, 1, NSAMP))
 for i,c in zip(range(NSAMP), cols):
     zb_pdfs.append(compute_pdf(gzf[plot_min:plot_max], bme[i][plot_min:plot_max], gzf[plot_min:plot_max]))
-    bt_pdfs.append(compute_pdf(b[i][plot_min:plot_max], t[i][plot_min:plot_max], bbins))
-    bt2_pdfs.append(compute_pdf(b[i][plot_min:plot_max], t2[i][plot_min:plot_max], bbins))
+    bt_pdfs.append(compute_pdf(b[i][plot_min:plot_max], t[i][plot_min:plot_max], bbins_data))
+    bt2_pdfs.append(compute_pdf(b[i][plot_min:plot_max], t2[i][plot_min:plot_max], bbins_data))
     zt_pdfs.append(compute_pdf(z_coords[plot_min:plot_max], t[i][plot_min:plot_max], gzf[plot_min:plot_max]))
     zt2_pdfs.append(compute_pdf(z_coords[plot_min:plot_max], t2[i][plot_min:plot_max],
         gzf[plot_min:plot_max]))
-    plt.plot(compute_pdf(b[i][plot_min:plot_max], t2[i][plot_min:plot_max], bbins),
-            0.5*(bbins[1:]+bbins[:-1]), color=c)
+    plt.plot(compute_pdf(b[i][plot_min:plot_max], t2[i][plot_min:plot_max], bbins_data),
+            0.5*(bbins_data[1:]+bbins_data[:-1]), color=c, label="t={0:.4f}".format(times[i]))
+
+plt.legend()
 plt.show()
 
 bt_pdfs = np.array(bt_pdfs)
@@ -131,6 +134,8 @@ bt2_pdfs = np.array(bt2_pdfs)
 zt_pdfs = np.array(zt_pdfs)
 zt2_pdfs = np.array(zt2_pdfs)
 zb_pdfs = np.array(zb_pdfs)
+
+#TODO reduce noise in pdfs
 
 bt_pdfs = np.swapaxes(bt_pdfs, axis1=1, axis2=0)
 zt_pdfs = np.swapaxes(zt_pdfs, axis1=1, axis2=0)
@@ -153,7 +158,7 @@ plt.plot(b[0,:,0], gzf)
 
 fig, ax = plt.subplots(1,2)
 
-X, Y = np.meshgrid(np.append(times, times[-1]+md['SAVE_STATS_DT']), bbins)
+X, Y = np.meshgrid(np.append(times, times[-1]+md['SAVE_STATS_DT']), bbins_data)
 bt_im = ax[0].pcolormesh(X, Y, bt_pdfs, shading='flat', cmap=plt.cm.get_cmap('jet'))
 
 Xz, Yz = np.meshgrid(np.append(times, times[-1]+md['SAVE_STATS_DT']), gz[plot_min:plot_max])
@@ -176,8 +181,8 @@ fig2, ax2 = plt.subplots(1,2)
 tcontours = np.append(times, times[-1]+md['SAVE_STATS_DT'])
 tcontours = 0.5*(tcontours[1:] + tcontours[:-1])
 
-X2, Y2 = np.meshgrid(np.append(times, times[-1]+md['SAVE_STATS_DT']), bbins)
-X2f, Y2f = np.meshgrid(tcontours, 0.5*(bbins[1:]+bbins[:-1]))
+X2, Y2 = np.meshgrid(np.append(times, times[-1]+md['SAVE_STATS_DT']), bbins_data)
+X2f, Y2f = np.meshgrid(tcontours, 0.5*(bbins_data[1:]+bbins_data[:-1]))
 bt2_im = ax2[0].pcolormesh(X2, Y2, bt2_pdfs, shading='flat', cmap=plt.cm.get_cmap('jet'))
 zt2_im = ax2[1].pcolormesh(Xz, Yz, zt2_pdfs, cmap=plt.cm.get_cmap('jet'))
 ax2[0].contour(X2f, Y2f, bt2_pdfs, 5, colors='white')

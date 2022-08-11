@@ -138,8 +138,14 @@ source_pdf = np.nanmean(source_pdf, axis=0)
 
 ##### Set up plot #####
 t_cont = 0.005
-X, Y = np.meshgrid(gx, gz[plot_min:plot_max+1])
-Xf, Yf = np.meshgrid(gxf, gzf[plot_min:plot_max])
+bplot = 0.5*(bbins[1:]+bbins[:-1])
+#X, Y = np.meshgrid(gx, gz[plot_min:plot_max+1])
+print(bbins)
+print(t[5][plot_min:plot_max].shape)
+print(bbins.shape)
+input()
+X, Y = np.meshgrid(gx, bbins)
+Xf, Yf = np.meshgrid(gxf, bbins)
 tcols = plt.cm.OrRd(np.linspace(0,1,nplot+1))[1:]
 
 #fig = plt.figure()
@@ -147,44 +153,15 @@ fig, ax = plt.subplots(1,2)
 
 ax[0].pcolormesh(X, Y, b[0][plot_min:plot_max], cmap=plt.cm.get_cmap('jet'), alpha=0.3)
 ax[1].plot(source_pdf, 0.5*(bbins[1:]+bbins[:-1]), color='k', linestyle='--')
-#ax[1].plot(50*theoretical_pdf, bs)
 
 for step,c in zip(t_inds, tcols):
     ax[0].contour(Xf, Yf, t[step][plot_min:plot_max], levels=[t_cont], colors=[c])
     b_pdf = compute_pdf(b[step][plot_min:plot_max], t[step][plot_min:plot_max], bbins, db, normalised=True)
 
-    #plt.plot(source_pdf, 0.5*(bbins[1:]+bbins[:-1]), color=c, linestyle='--')
     ax[1].plot(b_pdf, 0.5*(bbins[1:]+bbins[:-1]), color=c, label = "t={0:.3f} s".format(times[step]))
 
-plt.xlabel("tracer probability density")
-plt.ylabel("buoyancy")
+plt.xlabel("tracer (arbitrary units, normalised)")
+plt.ylabel("buoyancy ($m \, s^{{-2}}$)")
 plt.legend()
 plt.tight_layout()
-
-##### J. Craske (2016) distribution #####
-c1 = -25.79
-c2 = 1.00
-Pe = 10.99
-lstar = 1.10
-
-lambdas = np.linspace(0, 4, 1000)
-
-c3 = -np.power(Pe/(2*lstar), 0.5-Pe/2) * sc.gamma(0.5+Pe/2)
-lambda_inf = np.linspace(0, 120, 100000)[1:]
-c1 = 1/(integrate.trapezoid(np.exp(-Pe*lambda_inf/(2*lstar))*sc.hyp1f1(1, Pe/2+0.5, Pe*lambda_inf/(2*lstar))*\
-        np.power(lambda_inf, Pe/2-0.5)+c3,lambda_inf))
-c2 = c3*c1
-
-phi = c1 * np.exp(-Pe * lambdas / (2*lstar)) * np.power(lambdas, Pe/2) * sc.hyp1f1(1, Pe/2 + 0.5,\
-        Pe*lambdas/(2*lstar)) + c2*np.power(lambdas, 1/2)
-
-print(c1, c2)
-
-
-phifig = plt.figure()
-plt.plot(phi, lambdas)
-
-tfig = plt.figure()
-plt.plot(source_pdf, 0.5*(bbins[1:]+bbins[:-1]))
-plt.plot(40*phi, lambdas/25)
 plt.show()

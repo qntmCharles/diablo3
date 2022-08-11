@@ -17,7 +17,7 @@ z_lower = 20
 
 eps = 0.02
 
-save_data = True
+save_data = False
 data_loc = '/home/cwp29/diablo3/strat/high_res/verif/as_data.npy'
 
 ##### ---------------------- #####
@@ -337,7 +337,6 @@ def rhs_Bf(z, fluxes):
             B_factor*Bff(z/z_factor)/(theta_m_avg*beta_g_avg),
             -(N2f(z/z_factor)/N2)*fluxes[0]*(theta_m_avg/theta_g_avg)]
 
-"""
 def rhs_Qt(z, fluxes):
     return [2*Q_factor*Qf(z/z_factor)*fluxes[1]/(theta_m_avg*theta_g_avg),
             -(N2f(z/z_factor)/N2)*Q_factor*Qf(z/z_factor)*(theta_m_avg/theta_g_avg)]
@@ -361,7 +360,6 @@ def rhs_Ft(z, fluxes):
 def rhs_Ff(z, fluxes):
     return [2*alpha_p*np.power(fluxes[1], 1/4),
             2*fluxes[0]*F_factor*Fff(z/z_factor)/(theta_m_avg*theta_g_avg)]
-"""
 
 # Events for numerical solution
 def max_penetration_height(t, y): return y[1]
@@ -389,7 +387,6 @@ res_Bt = solve_ivp(rhs_Bt, (z_factor*zstar, z_factor*0.3),
         events=[max_penetration_height,neutral_buoyancy_height],
         method='Radau', t_eval=plot_points)
 
-"""
 res_Qt = solve_ivp(rhs_Qt, (z_factor*zstar, z_factor*0.3),
         [M_factor**2 * Mf(zstar)**2, F_factor*Ff(zstar)],
         method='Radau')
@@ -413,7 +410,6 @@ res_Ft = solve_ivp(rhs_Ft, (z_factor*zstar, z_factor*0.3),
 res_Ff = solve_ivp(rhs_Ff, (z_factor*zstar, z_factor*0.3),
         [Q_factor*Qff(zstar), M_factor**2 * Mff(zstar)**2],
         method='Radau')
-"""
 
 if res_t.success:
     plot_points_t = np.linspace(zstar*z_factor, res_t.t_events[0][0], 1000)
@@ -464,23 +460,6 @@ print("(FULL the) Mn = ",Mff(zn))
 print("(FULL the) Qn = ",Qff(zn))
 zn_index = get_index(zn, gzf)
 
-axs[0].plot(res_t.y[0], res_t.t, label="Numerical (non-dim, thresholded)", color='g', linestyle='--')
-axs[1].plot(np.sqrt(res_t.y[1]), res_t.t, color='g', linestyle='--')
-axs[2].plot(res_t.y[2], res_t.t, color='g', linestyle='--')
-
-axs[0].plot(res_f.y[0], res_f.t, label="Numerical (non-dim, full)", color='g', linestyle=':')
-axs[1].plot(np.sqrt(res_f.y[1]), res_f.t, color='g', linestyle=':')
-axs[2].plot(res_f.y[2], res_f.t, color='g', linestyle=':')
-
-axs[0].plot(res_Bt.y[0], res_Bt.t, label="Numerical, exp B (non-dim, thresholded)", color='m', linestyle='--')
-axs[1].plot(res_Bt.y[1], res_Bt.t, color='m', linestyle='--')
-axs[2].plot(res_Bt.y[2], res_Bt.t, color='m', linestyle='--')
-
-axs[0].plot(res_Bf.y[0], res_Bf.t, label="Numerical, exp B (non-dim, full)", color='m', linestyle=':')
-axs[1].plot(res_Bf.y[1], res_Bf.t, color='m', linestyle=':')
-axs[2].plot(res_Bf.y[2], res_Bf.t, color='m', linestyle=':')
-
-"""
 axs[1].plot(np.sqrt(res_Qt.y[0]), res_Qt.t, color='m', linestyle='--')
 axs[2].plot(res_Qt.y[1], res_Qt.t, color='m', label="Numerical, Q exp (non-dim, thresholded)",
         linestyle='--')
@@ -488,60 +467,22 @@ axs[2].plot(res_Qt.y[1], res_Qt.t, color='m', label="Numerical, Q exp (non-dim, 
 axs[1].plot(np.sqrt(res_Qf.y[0]), res_Qf.t, color='m', linestyle=':')
 axs[2].plot(res_Qf.y[1], res_Qf.t, color='m', label="Numerical, Q exp (non-dim, full)", linestyle=':')
 
-axs[0].plot(res_Mt.y[0], res_Mt.t, color='c', linestyle='--')
-axs[2].plot(res_Mt.y[1], res_Mt.t, color='c', label="Numerical, M exp (non-dim, thresholded)",
+axs[0].plot(res_Mt.y[0], res_Mt.t, color='r', linestyle='--')
+axs[2].plot(res_Mt.y[1], res_Mt.t, color='r', label="Numerical, M exp (non-dim, thresholded)",
         linestyle='--')
 
-axs[0].plot(res_Mf.y[0], res_Mf.t, color='c', linestyle=':')
-axs[2].plot(res_Mf.y[1], res_Mf.t, color='c', label="Numerical, M exp (non-dim, full)", linestyle=':')
+axs[0].plot(res_Mf.y[0], res_Mf.t, color='r', linestyle=':')
+axs[2].plot(res_Mf.y[1], res_Mf.t, color='r', label="Numerical, M exp (non-dim, full)", linestyle=':')
 
-axs[0].plot(res_Ft.y[0], res_Ft.t, color='y', linestyle='--')
-axs[1].plot(np.sqrt(res_Ft.y[1]), res_Ft.t, color='y', linestyle='--',
+axs[0].plot(res_Ft.y[0], res_Ft.t, color='g', linestyle='--')
+axs[1].plot(np.sqrt(res_Ft.y[1]), res_Ft.t, color='g', linestyle='--',
         label="Numerical, F exp (non-dim, thresholded)")
 
-axs[0].plot(res_Ff.y[0], res_Ff.t, color='y', linestyle=':')
-axs[1].plot(np.sqrt(res_Ff.y[1]), res_Ff.t, color='y', linestyle=':',
+axs[0].plot(res_Ff.y[0], res_Ff.t, color='g', linestyle=':')
+axs[1].plot(np.sqrt(res_Ff.y[1]), res_Ff.t, color='g', linestyle=':',
         label="Numerical, F exp (non-dim, full)")
-"""
 
 ##### ---------------------- #####
-
-# Analytic expressions
-
-zstar_index = get_index(zstar, gzf)
-ztop_index = get_index(0.3, gzf)
-gzf_upper = gzf[zstar_index:]
-gzf_lower = gzf[:zstar_index]
-
-factor1 = 1.2 * alpha
-factor2 = 0.9 * alpha * F0 / (theta_m_avg*beta_g_avg)
-
-Q_theory = factor1 * np.power(factor2, 1/3) * np.power(gzf, 5/3)
-Q_theory_plot = factor1 * np.power(factor2, 1/3) * np.power(gzf[:ztop_index], 5/3)
-Qft = interpolate.interp1d(gzf, Q_theory)
-
-F_theory_upper = F0 - 0.25 * N2 * np.power(0.9*alpha, 4/3) * \
-        np.power(theta_m_avg**2 * F0 / beta_g_avg, 1/3) * \
-        np.power(theta_g_avg, -1) * (np.power(gzf_upper, 8/3) - np.power(zstar, 8/3))
-
-F_theory_lower = F0*np.ones_like(gzf_lower)
-
-#axs[1].plot(M_theory, gzf, label="Full", color='r', linestyle=':')
-#axs[2].plot(F_theory_lower, gzf_lower, label="NEW", color='r', linestyle=':')
-#axs[2].plot(F_theory_upper, gzf_upper, label="NEW", color='r', linestyle=':')
-
-def rhs_theory(z, fluxes):
-    return [2*Q_factor*Qft(z/z_factor)*fluxes[1],
-            -(N2f(z/z_factor)/N2)*Q_factor*Qft(z/z_factor)]
-
-res_Qtheory = solve_ivp(rhs_theory, (z_factor*zstar, z_factor*0.3),
-        [M_factor**2 * Mf(zstar)**2, F_factor*Ff(zstar)],
-        method='Radau', t_eval = plot_points)
-
-axs[0].plot(Q_theory_plot*Q_factor, gzf[:ztop_index]*z_factor, label="NEW", color='r', linestyle='--')
-axs[1].plot(np.sqrt(res_Qtheory.y[0]), res_Qtheory.t, color='r', linestyle='--')
-axs[2].plot(res_Qtheory.y[1], res_Qtheory.t, color='r', linestyle='--')
-
 
 axs[0].legend()
 axs[1].legend()
@@ -554,168 +495,5 @@ axs[2].set_ylim(z_factor*zstar/1.5, z_factor*0.3)
 axs[0].set_xlim(-1, 6)
 axs[1].set_xlim(-1, 10)
 axs[2].set_xlim(-5, 3)
-
-##### ---------------------- #####
-
-tracer_thresh = 5e-4
-tracer_data_horiz = th2_xz[1:, zn_index, :]
-tracer_data_vert = th2_xz[1:int(len(times)/3), :, int(md['Nx']/2)]
-
-plume_horiz = np.where(tracer_data_horiz > tracer_thresh, 1, 0)
-plume_vert = np.where(tracer_data_vert > tracer_thresh, 1, 0)
-
-width_l = []
-width_r = []
-for i in range(len(plume_horiz)):
-    stuff = np.where(plume_horiz[i] == 1)[0]
-    if len(stuff) == 0:
-        width_r.append(0)
-        width_l.append(0)
-    else:
-        width_l.append(np.max(np.where(plume_horiz[i] == 1)) * md['LX']/md['Nx'] - md['LX']/2)
-        width_r.append(md['LX']/2 - np.min(np.where(plume_horiz[i] == 1)) * md['LX']/md['Nx'])
-
-width_l = np.array(width_l)
-width_r = np.array(width_r)
-mean_data = 0.5*(width_l+width_r)
-
-heights = []
-for i in range(len(plume_vert)):
-    stuff = np.where(plume_vert[i] == 1)[0]
-    if len(stuff) == 0:
-        heights.append(0)
-    else:
-        heights.append(gzf[np.max(stuff)])
-
-##### ---------------------- #####
-
-b_min = 0
-b_max = np.max(th1_xz[0,:,int(md['Nx']/2)])/4
-nbins = 129
-
-check_data = th1_xz[0,:,int(md['Nx']/2)]
-plot_min = -1
-plot_max = -1
-for j in range(md['Nz']):
-    if gzf[j] < md['H'] and gzf[j+1] > md['H']:
-        plot_min = j
-    if check_data[j-1] <= b_max and check_data[j] >= b_max:
-        plot_max = j
-
-if plot_min == -1: print("Warning: plot_min miscalculated")
-if plot_max == -1: print("Warning: plot_max miscalculated")
-
-bbins, db = np.linspace(b_min, b_max, nbins, retstep=True)
-bins = [0 for i in range(nbins)]
-
-zt_pdf = compute_pdf(z_coords[plot_min:plot_max], th2_xz[-1][plot_min:plot_max], gzf[plot_min:plot_max])
-
-
-##### ---------------------- #####
-
-fig, ax = plt.subplots(1,3)
-fig.suptitle("TESTING: horizontal time series at z = {0:.4f}".format(gzf[zn_index]))
-X, Y = np.meshgrid(gx, times)
-Xf, Yf = np.meshgrid(gxf, times[1:])
-ax[0].pcolormesh(X, Y, tracer_data_horiz)
-ax[0].contour(Xf, Yf, tracer_data_horiz, levels=[tracer_thresh], colors=['white'])
-ax[1].scatter(100*width_l, 0.5*(times[1:]+times[:-1]), color='b', label="right")
-ax[1].scatter(100*width_r, 0.5*(times[1:]+times[:-1]), color='r', label="left")
-ax[1].scatter(100*mean_data, 0.5*(times[1:]+times[:-1]), color='purple', label="avg")
-ax[1].legend()
-
-mean_times = 0.5*(times[1:] + times[:-1])
-
-ax[2].scatter(mean_times[mean_data != 0], 100*mean_data[mean_data != 0])
-ax[2].set_yscale('log')
-ax[2].set_xscale('log')
-
-R_fit = lambda t, A, k: A*np.power(t,k)
-
-t = mean_times[mean_data != 0][1:]
-R = 100*mean_data[mean_data != 0][1:]
-
-early_t = t[:5]
-early_R = R[:5]
-mid_t = t[15:20]
-mid_R = R[15:20]
-late_t = t[35:40]
-late_R = R[35:40]
-
-popt, _ = curve_fit(R_fit, early_t, early_R)
-ax[2].plot(early_t, R_fit(early_t, *popt), color='k', linestyle='--')
-ax[2].plot(early_t, early_R)
-print("Early: ",  popt[1])
-
-popt, _ = curve_fit(R_fit, mid_t, mid_R)
-ax[2].plot(mid_t, R_fit(mid_t, *popt), color='k', linestyle='--')
-ax[2].plot(mid_t, mid_R)
-print("Mid: ",  popt[1])
-
-popt, _ = curve_fit(R_fit, late_t, late_R)
-ax[2].plot(late_t, R_fit(late_t, *popt), color='k', linestyle='--')
-ax[2].plot(late_t, late_R)
-print("Late: ",  popt[1])
-
-v = np.gradient(mean_data, 0.5*(times[1:]+times[:-1]))
-t_min = get_index(4, 0.5*(times[1:]+times[:-1]))
-t_max = get_index(5, 0.5*(times[1:]+times[:-1]))
-v_intrusion = np.mean(v[t_min:t_max])
-print("(exp) Initial intrusion speed: ", round(v_intrusion,5))
-print("(THRESH the)", v_intrusion/(Mf(zn)/Qf(zn)))
-print("(FULL the)", v_intrusion/(Mff(zn)/Qff(zn)))
-
-fig1, ax1 = plt.subplots(1,2)
-X, Y = np.meshgrid(times[:int(len(times)/3)], gz)
-Xf, Yf = np.meshgrid(times[1:int(len(times)/3)], gzf)
-fig1.suptitle("TESTING: vertical time series")
-ax1[0].pcolormesh(X,Y, np.swapaxes(tracer_data_vert,0,1))
-ax1[0].contour(Xf, Yf, np.swapaxes(tracer_data_vert,0,1), levels=[tracer_thresh], colors=['white'])
-ax1[1].plot(times[1:int(len(times)/3)], heights)
-zmax_exp = np.max(heights)
-print("(exp) Max penetration height: ", round(zmax_exp,5))
-
-fig2 = plt.figure()
-plt.title("TESTING: tracer vs. height pdf")
-plt.plot(zt_pdf, gz[plot_min:plot_max-1])
-zn_exp = gz[plot_min:plot_max][np.argmax(zt_pdf)]
-print("(exp) Neutral buoyancy height: ", round(zn_exp,5))
-
-axs[0].axhline(zn_exp*z_factor, color='k', alpha=0.5)
-axs[1].axhline(zn_exp*z_factor, color='k', alpha=0.5)
-axs[2].axhline(zn_exp*z_factor, color='k', alpha=0.5)
-
-print("(THRESH exp)", v_intrusion/(Mf(zn_exp)/Qf(zn_exp)))
-print("(FULL exp)", v_intrusion/(Mff(zn_exp)/Qff(zn_exp)))
-
-if save_data:
-    print("Saving data...")
-    # Collect together data to save
-    data_row = [save_dir, zmax_theory, zmax_exp, zn_theory, zn_exp, v_intrusion, Mf(zn_exp)/Qf(zn_exp),
-            Mff(zn_exp)/Qff(zn_exp)]
-    data_row = np.array(data_row)
-
-    if isfile(data_loc):
-        print("Data file found. Saving data to existing file...")
-        data_array = np.load(data_loc, allow_pickle=False)
-        if data_row[0] not in data_array:
-            data_array = np.insert(data_array, -1, data_row, axis=0)
-            np.save(data_loc, data_array, allow_pickle=False)
-        else:
-            ow_flag = input("ERROR: Data file contains entry from this directory already. Overwrite? (y/n)")
-            if ow_flag == "y":
-                for i in range(len(data_array)):
-                    if data_array[i,0] == save_dir:
-                        data_array = np.delete(data_array, i, axis=0)
-                data_array = np.insert(data_array, -1, data_row, axis=0)
-                np.save(data_loc, data_array, allow_pickle=False)
-    else:
-        print("Data file not found. Saving data to new file...")
-        data_array = np.array([data_row])
-        np.save(data_loc, data_array, allow_pickle=False)
-
-Bfig = plt.figure()
-plt.plot(B, gzf, linestyle='--')
-plt.plot(B_full, gzf, linestyle=':')
 
 plt.show()

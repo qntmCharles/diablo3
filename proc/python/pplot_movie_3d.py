@@ -32,7 +32,7 @@ with h5py.File(save_dir+"/movie.h5", 'r') as f:
     time_keys = list(f['th1_xy'])
     print(time_keys)
     # Get buoyancy data
-    th1_xy = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
+    th1_xy = np.array([np.array(f['epsilon_xz'][t]) for t in time_keys])
     th1_zy = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
     NSAMP = len(th1_xy)
     times = np.array([float(f['th1_xz'][tstep].attrs['Time']) for tstep in time_keys])
@@ -56,7 +56,7 @@ axs[1].axhline(md['Lyc']+md['Lyp'],color='white', linestyle=':')
 
 cb[0] = plt.colorbar(ims[0],ax=axs[0])
 cb[1] = plt.colorbar(ims[1],ax=axs[1])
-ims[0].set_clim(0, 0.5)
+ims[0].set_clim(0, 1e-5)
 #ims[1].set_clim(0, 1e-5)
 
 fig.suptitle("$\\theta_1$, time = 0 secs")

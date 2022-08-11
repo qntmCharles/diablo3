@@ -20,6 +20,9 @@ save = False
 
 ##### ----------------------- #####
 
+def get_index(z, griddata):
+    return int(np.argmin(np.abs(griddata - z)))
+
 def compute_pdf(data, ref, bins, normalised=False):
     out_bins = [0 for i in range(len(bins)-1)]
 
@@ -74,6 +77,7 @@ interval = 80
 step = np.round(interval*tau / md['SAVE_STATS_DT'])
 
 t_inds = list(map(int,step*np.array(range(1, nplot+1))))
+t_inds = t_inds[1:] # exclude first time
 tplot = [times[i] for i in t_inds]
 print("Plotting at times: ",tplot)
 print("with interval", step*md['SAVE_STATS_DT'])
@@ -140,28 +144,31 @@ alpha = md['alpha_e']
 #F *= np.pi
 #theoretical_pdf = md['H'] + (np.exp(-0.5 * np.power(rs,2) / (6/5 * alpha * md['H'])**2) * 5* F * np.power(
         #9/10 * alpha * F,-1/3) * np.power(md['H'],-5/3) / (3*alpha*md['N2']))
+
 theoretical_pdf = rs*np.exp(-0.5*np.power(rs/rm,2))
 bs = (np.exp(-0.5 * np.power(rs,2) / (6/5 * alpha * md['H'])**2) * 5* F * np.power(
         9/10 * alpha * F,-1/3) * np.power(md['H'],-5/3) / (3*alpha))
 zs = md['H'] + bs/md['N2']
 
-b = np.linspace(0, np.max(bs), 1000)[1:-1]
-theoretical_b_pdf = b * np.sqrt(-2*np.log(b * (0.6 * alpha/F * np.power(md['H'], 5/3) * \
+bplot = np.linspace(0, np.max(bs), 1000)[1:-1]
+theoretical_b_pdf = bplot * np.sqrt(-2*np.log(bplot * (0.6 * alpha/F * np.power(md['H'], 5/3) * \
         np.power(0.9 * alpha * F, 1/3) )))
 
-theoretical_b_pdf /= integrate.trapezoid(theoretical_b_pdf, b)
-print(integrate.trapezoid(theoretical_b_pdf, b))
+theoretical_b_pdf /= integrate.trapezoid(theoretical_b_pdf, bplot)
 
 max_index = np.argmax(theoretical_pdf)
 max_val = np.max(theoretical_pdf)
+z_max = zs[max_index]
+pdf_z_max = get_index(z_max, gz[plot_min:plot_max-1])
 
 mean_exp_pdf = np.mean(pdfs[3:], axis=0) # exclude early-time PDFs
+ax[1].plot(mean_exp_pdf, gz[plot_min:plot_max-1], color='m')
 
 theoretical_pdf /= max_val
-theoretical_pdf *= mean_exp_pdf[max_index]
+theoretical_pdf *= mean_exp_pdf[pdf_z_max]
 
-#ax[1].plot(theoretical_pdf, zs, color='b', linestyle=':', label='theory')
-ax[1].plot(theoretical_b_pdf, md['H'] + b/md['N2'], color='g', linestyle=':', label='theory')
+ax[1].plot(theoretical_pdf, zs, color='b', linestyle=':', label='theory')
+ax[1].plot(theoretical_b_pdf, md['H'] + bplot/md['N2'], color='g', linestyle=':', label='theory')
 ax[1].set_ylim(gz[plot_min], gz[plot_max])
 ax[1].axvline(0, color='k', linestyle='--', alpha=0.5)
 ax[1].legend()
@@ -173,5 +180,15 @@ ax[1].set_xlabel("tracer")
 plt.tight_layout()
 
 fig = plt.figure()
-plt.plot(theoretical_b_pdf, b)
+plt.plot(rs, bs, color='k', label="theory")
+plt.plot(-rs, bs, color='k')
+plot_ids = [0, 10, 20, 30]
+cols = plt.cm.rainbow(np.linspace(0, 1, len(plot_ids)))
+z = 0.95*md['H']
+bs = (np.exp(-0.5 * np.power(rs,2) / (6/5 * alpha * z)**2) * 5* F * np.power(
+        9/10 * alpha * F,-1/3) * np.power(z,-5/3) / (3*alpha))
+for step, c in zip(plot_ids, cols):
+    plt.plot(gxf-md['LX']/2, t[step][get_index(z, gzf)], color=c, label="t={0:.2f} s".format(times[step]))
+
+plt.legend()
 plt.show()
