@@ -32,8 +32,11 @@ def compute_pdf(data, ref, bins, normalised=False):
 
 ##### USER-DEFINED PARAMETERS #####
 params_file = "params.dat"
+#out_file = "out.002241.h5"
+out_file = "end.h5"
 
 save = False
+use_3d = False
 
 ##### ----------------------- #####
 
@@ -56,16 +59,11 @@ gxf, gyf, gzf, dzf = get_grid(join(run_dir, 'grid.h5'), md)
 gx, gy, gz, dz = get_grid(join(run_dir, 'grid.h5'), md, fractional_grid=False)
 
 ##### Get data and time indices #####
-with h5py.File(join(save_dir,"mean.h5"), 'r') as f:
-    print("Mean keys: %s" % f.keys())
-    time_keys = list(f['bbins'])
-    print(time_keys)
-    bbins_file = np.array([np.array(f['bbins'][t]) for t in time_keys])
-    source_dists = np.array([np.array(f['tb_source'][t]) for t in time_keys])
-    strat_dists = np.array([np.array(f['tb_strat'][t]) for t in time_keys])
-    times = np.array([float(f['tb_source'][t].attrs['Time']) for t in time_keys])
-
-    f.close()
+if use_3d:
+    with h5py.File(join(save_dir, out_file), 'r') as f:
+        times = np.array([f['Timestep'].attrs['Time']])
+        b_3d = np.array([f['Timestep']['TH1']])
+        t_3d = np.array([f['Timestep']['TH2']])
 
 with h5py.File(join(save_dir,"movie.h5"), 'r') as f:
     print("Movie keys: %s" % f.keys())
@@ -80,15 +78,18 @@ with h5py.File(join(save_dir,"movie.h5"), 'r') as f:
     f.close()
 
 # Compute time indices
-t_inds = list(range(10, NSAMP, 10))
-nplot = len(t_inds)
-print(t_inds)
+nplot = 4
+interval = 5
+
+step = np.round(interval/(np.sqrt(md['N2'])*md['SAVE_STATS_DT']))
+
+t_inds = list(map(int,step*np.array(range(1, nplot+1))))
 
 tplot = [times[i] for i in t_inds]
 
 print("Plotting at times: ",tplot)
+print("with interval", step*md['SAVE_STATS_DT'])
 
-print(bbins_file.shape)
 
 ############################################################################################################
 # Source tracer vs. buoyancy distribution: calculation and diagnostics
@@ -115,40 +116,47 @@ for j in range(md['Nz']):
 if plot_min == -1: print("Warning: plot_min miscalculated")
 if plot_max == -1: print("Warning: plot_max miscalculated")
 
-bin_end = int(np.where(bbins_file == -1)[1][0])
-bbins = bbins_file[0, :bin_end]
-bbins_plot = 0.5*(bbins[1:] + bbins[:-1])
+bbins = np.linspace(b_min, b_max, nbins)
+bbins_data = centreline_b[plot_min:plot_max]
+bbins = bbins_data
 
-source_dists = source_dists[:, :bin_end-1]
-strat_dists = strat_dists[:, :bin_end-1]
+bbins_plot = 0.5*(bbins[1:] + bbins[:-1])
 
 ##### Compute 'source' PDF #####
 
 source_dist_fig = plt.figure()
 
 # First get data we want to process
-top = md['H']
-depth = md['H']-0.05
+top = 0.95*md['H']
+depth = 10*md['r0']
 
 top_idx = get_index(top, gzf)
 bottom_idx = get_index(top-depth, gzf)
 
-# Averaging period (s)
-t_start = 5
-t_end = 10
-start_idx = get_index(t_start, times)
-end_idx = get_index(t_end, times)
+if use_3d:
+    b_source = b_3d[:, :, bottom_idx:top_idx, :]
+    t_source = t_3d[:, :, bottom_idx:top_idx, :]
+else:
+    b_source = b[:, bottom_idx:top_idx]
+    t_source = t[:, bottom_idx:top_idx]
 
+# Averaging period (s)
+if use_3d:
+    start_idx = 0
+    end_idx = 1
+else:
+    t_start = 5
+    t_end = 10
+    start_idx = get_index(t_start, times)
+    end_idx = get_index(t_end, times)
+
+source_dist = []
 cols = plt.cm.rainbow(np.linspace(0, 1, end_idx-start_idx))
 for i, c in zip(range(start_idx, end_idx), cols):
-    area = integrate.trapezoid(np.abs(source_dists[i-start_idx]), bbins_plot)
-    plt.plot(source_dists[i-start_idx]/area, bbins_plot, color=c, alpha=0.5, linestyle=':')
+    source_dist.append(compute_pdf(b_source[i], t_source[i], bbins, normalised=True))
+    plt.plot(source_dist[i-start_idx], bbins_plot, color=c, alpha=0.5)
 
-
-source_dist = np.nanmean(source_dists[start_idx:end_idx, :], axis=0)
-area = integrate.trapezoid(np.abs(source_dist), bbins_plot)
-source_dist /= area
-
+source_dist = np.nanmean(source_dist, axis=0)
 plt.plot(source_dist, bbins_plot, color='k', linestyle='--')
 plt.xlabel("Tracer (normalised)")
 plt.ylabel("Buoyancy")
@@ -158,8 +166,12 @@ plt.ylabel("Buoyancy")
 source_bt_fig, ax = plt.subplots(1,2, figsize=(10, 3))
 Xplot, Yplot = np.meshgrid(gx, gz[:plot_max+1])
 
-ax[0].pcolormesh(Xplot, Yplot, np.mean(b[:,:plot_max],axis=0))
-ax[1].pcolormesh(Xplot, Yplot, np.mean(t[:,:plot_max],axis=0))
+if use_3d:
+    ax[0].pcolormesh(Xplot, Yplot, b_3d[0,int(md['Nx']/2),:plot_max])
+    ax[1].pcolormesh(Xplot, Yplot, t_3d[0,int(md['Nx']/2),:plot_max])
+else:
+    ax[0].pcolormesh(Xplot, Yplot, np.mean(b[:,:plot_max],axis=0))
+    ax[1].pcolormesh(Xplot, Yplot, np.mean(t[:,:plot_max],axis=0))
 
 ax[0].set_title("Buoyancy field")
 ax[1].set_title("Tracer field")
@@ -172,7 +184,6 @@ plt.tight_layout()
 
 ##### Generate tracer vs. buoyancy heatmap
 
-"""
 source_hmap_fig, ax = plt.subplots(1,2, figsize=(15,5))
 
 bt_dists = []
@@ -211,7 +222,6 @@ ax[1].set_xlabel("Time (s)")
 ax[1].set_ylabel("Buoyancy")
 
 plt.tight_layout()
-"""
 
 ############################################################################################################
 # z_max, z_ss and z_eq calculation
@@ -222,29 +232,57 @@ plt.tight_layout()
 ############################################################################################################
 
 ##### Set up plot #####
-t_cont = 0.0005
+t_cont = 0.005
 X, Y = np.meshgrid(gx, gz[plot_min:plot_max+1])
-Xf, Yf = np.meshgrid(gxf, gzf[plot_min-1:plot_max+1])
+Xf, Yf = np.meshgrid(gxf, gzf[plot_min:plot_max])
 tcols = plt.cm.OrRd(np.linspace(0,1,nplot+1))[1:]
 
 #fig = plt.figure()
-fig, ax = plt.subplots(1,2, figsize=(15, 5))
+fig, ax = plt.subplots(1,2)
 
 ax[0].pcolormesh(X, Y, b[0][plot_min:plot_max], cmap=plt.cm.get_cmap('jet'), alpha=0.3)
-ax[1].plot(source_dist, bbins_plot, color='k', linestyle='--')
+ax[1].plot(source_dist, 0.5*(bbins[1:]+bbins[:-1]), color='k', linestyle='--')
 
 for step,c in zip(t_inds, tcols):
-    ax[0].contour(Xf, Yf, t[step][plot_min-1:plot_max+1], levels=[t_cont], colors=[c])
-    area = integrate.trapezoid(np.abs(strat_dists[step]), bbins_plot)
-    ax[1].plot(strat_dists[step]/area, bbins_plot, color=c, label = "t={0:.3f} s".format(times[step]))
+    ax[0].contour(Xf, Yf, t[step][plot_min:plot_max], levels=[t_cont], colors=[c])
+    b_pdf = compute_pdf(b[step][plot_min:plot_max], t[step][plot_min:plot_max], bbins, normalised=True)
 
-ax[1].axvline(0, color='k')
+    ax[1].plot(b_pdf, 0.5*(bbins[1:]+bbins[:-1]), color=c, label = "t={0:.3f} s".format(times[step]))
 
-ax[1].set_ylim(b[0][plot_min][0], b[0][plot_max][0])
-ax[0].set_ylim(gz[plot_min], gz[plot_max])
 plt.xlabel("tracer (arbitrary units, normalised)")
 plt.ylabel("buoyancy ($m \, s^{{-2}}$)")
 plt.legend()
-
 plt.tight_layout()
+
+poster_fig = plt.figure(facecolor=(0.9,0.9,0.9))
+ax = plt.gca()
+
+ax.set_facecolor((0.9, 0.9, 0.9))
+
+N = np.sqrt(md['N2'])
+F0 = md['b0'] * np.power(md['r0'],2)
+t_nd = np.power(N, -1)
+b_nd = np.power(N, 5/4) * np.power(F0, 1/4)
+
+plt.plot(source_dist, bbins_plot/b_nd, color='k', linestyle='--', label="pre-penetration")
+for step, c in zip(t_inds, tcols):
+    b_pdf = compute_pdf(b[step][plot_min:plot_max], t[step][plot_min:plot_max], bbins, normalised=True)
+    plt.plot(b_pdf, bbins_plot/b_nd, color=c, label="t={0:.2f}".format(times[step]/t_nd))
+
+#blue = (19/256, 72/256, 158/256)
+#ax.tick_params(color=blue, labelcolor=blue)
+#for spine in ax.spines.values():
+#    spine.set_edgecolor(blue)
+
+#l = plt.legend(facecolor=(0.9,0.9,0.9))
+#for text in l.get_texts():
+#    text.set_color(blue)
+
+plt.legend(facecolor=(0.9,0.9,0.9))
+plt.xlim(0, 54)
+plt.ylim(0, 2.6)
+plt.ylabel("buoyancy (non-dimensionalised)")
+plt.xlabel("tracer (arbitrary units)")
+plt.tight_layout()
+plt.savefig('/home/cwp29/Documents/posters/issf2/tb_dist_gray.png', dpi=200)
 plt.show()

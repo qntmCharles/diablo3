@@ -124,7 +124,7 @@ Writer = animation.writers['ffmpeg']
 writer = Writer(fps=20, bitrate=1800)
 
 print("Starting plot...")
-anim = animation.FuncAnimation(fig, animate, interval=250, frames=NSAMP)
+anim = animation.FuncAnimation(fig, animate, interval=250, frames=40)#NSAMP)
 
 now = datetime.now()
 #anim.save(save_dir+'fountain_w_%s.mp4'%now.strftime("%Y-%m-%d:%H"),writer=writer, dpi=300)
@@ -175,6 +175,6 @@ def animate2(step):
 
     return line1, line2, im,
 
-anim2 = animation.FuncAnimation(fig2, animate2, interval=250, frames=NSAMP)
+anim2 = animation.FuncAnimation(fig2, animate2, interval=250, frames=40)#NSAMP)
 
 plt.show()

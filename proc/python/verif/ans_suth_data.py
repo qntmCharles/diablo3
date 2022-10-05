@@ -131,7 +131,7 @@ with h5py.File(save_dir+"/movie.h5", 'r') as f:
     th1_xz = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
     th2_xz = np.array([np.array(f['th2_xz'][t]) for t in time_keys])
     NSAMP = len(th1_xz)
-    times = np.array([float(t)*md['SAVE_MOVIE_DT'] for t in time_keys])
+    times = np.array([(float(t)-1)*md['SAVE_MOVIE_DT'] for t in time_keys])
     f.close()
 
 b_centreline = th1_xz[0, :, int(md['Nx']/2)]
@@ -273,7 +273,7 @@ print("alpha = ",alpha_p)
 z_factor = 1 / (np.power(F0, 1/4) *
         np.power(N, -3/4))
 
-print(z_factor)
+print("Factor to non-dimensionalise length: ",z_factor)
 
 Q_factor = 1 / (np.power(F0, 3/4) *
         np.power(N, -5/4))
@@ -417,35 +417,40 @@ res_Ff = solve_ivp(rhs_Ff, (z_factor*zstar, z_factor*0.3),
 
 if res_t.success:
     plot_points_t = np.linspace(zstar*z_factor, res_t.t_events[0][0], 1000)
-    print("(THRESH the) Max penetration height: ",round(res_t.t_events[0][0]/z_factor,5))
+    #print("(THRESH the) Max penetration height: ",round(res_t.t_events[0][0]/z_factor,5))
 elif res_t.y[1][-1] < 1e-9:
-    print("(THRESH the) Max penetration height: ",round(res_t.t[-1]/z_factor,5))
+    #print("(THRESH the) Max penetration height: ",round(res_t.t[-1]/z_factor,5))
     plot_points_t = np.linspace(zstar*z_factor, res_t.t[-1], 1000)
 else:
-    print("THRESH Inconclusive max penetration height.")
-    print("THRESH Momentum flux at end of integration: ", np.sqrt(res_t.y[1][-1]/M_factor))
-    print("THRESH Attained at z = ",res_t.t[-1])
+    #print("THRESH Inconclusive max penetration height.")
+    #print("THRESH Momentum flux at end of integration: ", np.sqrt(res_t.y[1][-1]/M_factor))
+    #print("THRESH Attained at z = ",res_t.t[-1])
     plot_points_t = np.linspace(zstar*z_factor, res_t.t[-1], 1000)
 
 if res_f.success:
-    print(res_f.t_events[0])
-    print("(the) Max penetration height: ",round(res_f.t_events[0][0]/z_factor,5))
+    #print(res_f.t_events[0])
+    #print("(the) Max penetration height: ",round(res_f.t_events[0][0]/z_factor,5))
     zmax_theory = res_f.t_events[0][0]/z_factor
     plot_points_f = np.linspace(zstar*z_factor, res_f.t_events[0][0], 1000)
 elif res_f.y[1][-1] < 1e-9:
-    print("(the) Max penetration height: ",round(res_f.t[-1]/z_factor,5))
+    #print("(the) Max penetration height: ",round(res_f.t[-1]/z_factor,5))
     plot_points_f = np.linspace(zstar*z_factor, res_f.t[-1], 1000)
     zmax_theory = res_f.t[-1]/z_factor
 else:
-    print("Inconclusive max penetration height.")
-    print("Momentum flux at end of integration: ", np.sqrt(res_f.y[1][-1]/M_factor))
-    print("Attained at z = ",res_f.t[-1])
+    #print("Inconclusive max penetration height.")
+    #print("Momentum flux at end of integration: ", np.sqrt(res_f.y[1][-1]/M_factor))
+    #print("Attained at z = ",res_f.t[-1])
     zmax_theory = res_f.t[-1]/z_factor
     plot_points_f = np.linspace(zstar*z_factor, res_f.t[-1], 1000)
 
-print("(the) Neutral buoyancy height: ",round(res_f.t_events[1][0]/z_factor,5))
+print("Non-dimensional max height (theory): ",zmax_theory)
+print("Dimensional: ",zmax_theory*z_factor)
+
+#print("(the) Neutral buoyancy height: ",round(res_f.t_events[1][0]/z_factor,5))
 zn_theory = res_f.t_events[1][0]/z_factor
-print("(THRESH the) Neutral buoyancy height: ",round(res_t.t_events[1][0]/z_factor,5))
+print("Non-dimensional neutral buoyancy height (theory): ",zn_theory)
+print("Dimensional: ",zn_theory*z_factor)
+#print("(THRESH the) Neutral buoyancy height: ",round(res_t.t_events[1][0]/z_factor,5))
 
 res_t = solve_ivp(rhs_t, (z_factor*zstar, z_factor*0.3),
         [Q_factor*Qf(zstar), M_factor**2 * Mf(zstar)**2, F_factor*Ff(zstar)],
@@ -457,12 +462,10 @@ res_f = solve_ivp(rhs_f, (z_factor*zstar, z_factor*0.3),
         method='Radau', dense_output=True, t_eval=plot_points_f)
 
 
-zn = res_f.t_events[1][0]/z_factor
-print("(THRESH the) Mn = ",Mf(zn))
-print("(THRESH the) Qn = ",Qf(zn))
-print("(FULL the) Mn = ",Mff(zn))
-print("(FULL the) Qn = ",Qff(zn))
-zn_index = get_index(zn, gzf)
+#print("(THRESH the) Mn = ",Mf(zn))
+#print("(THRESH the) Qn = ",Qf(zn))
+#print("(FULL the) Mn = ",Mff(zn))
+#print("(FULL the) Qn = ",Qff(zn))
 
 axs[0].plot(res_t.y[0], res_t.t, label="Numerical (non-dim, thresholded)", color='g', linestyle='--')
 axs[1].plot(np.sqrt(res_t.y[1]), res_t.t, color='g', linestyle='--')
@@ -557,6 +560,39 @@ axs[2].set_xlim(-5, 3)
 
 ##### ---------------------- #####
 
+b_min = 0
+b_max = np.max(th1_xz[0,:,int(md['Nx']/2)])/4
+nbins = 129
+
+check_data = th1_xz[0,:,int(md['Nx']/2)]
+plot_min = -1
+plot_max = -1
+for j in range(md['Nz']):
+    if gzf[j] < md['H'] and gzf[j+1] > md['H']:
+        plot_min = j
+    if check_data[j-1] <= b_max and check_data[j] >= b_max:
+        plot_max = j
+
+if plot_min == -1: print("Warning: plot_min miscalculated")
+if plot_max == -1: print("Warning: plot_max miscalculated")
+
+bbins, db = np.linspace(b_min, b_max, nbins, retstep=True)
+bins = [0 for i in range(nbins)]
+
+zt_pdf = compute_pdf(z_coords[plot_min:plot_max], th2_xz[-1][plot_min:plot_max], gzf[plot_min:plot_max])
+
+##### ---------------------- #####
+
+avg_tracer = np.mean(th2_xz[:,plot_min:plot_max,int(md['Nx']/2):],axis=0)
+avg_tracer_thresh = np.where(avg_tracer > 0.001, 1, 0)
+edges = np.argmin(avg_tracer_thresh, axis=1)
+peak = np.argwhere(edges == np.max(edges)).flatten()
+zn_exp = np.mean(gzf[plot_min:plot_max][peak])
+zn_index = get_index(zn_exp, gzf)
+print("(exp) Neutral buoyancy height: ", round(zn_exp,5))
+
+##### ---------------------- #####
+
 tracer_thresh = 5e-4
 tracer_data_horiz = th2_xz[1:, zn_index, :]
 tracer_data_vert = th2_xz[1:int(len(times)/3), :, int(md['Nx']/2)]
@@ -586,30 +622,6 @@ for i in range(len(plume_vert)):
         heights.append(0)
     else:
         heights.append(gzf[np.max(stuff)])
-
-##### ---------------------- #####
-
-b_min = 0
-b_max = np.max(th1_xz[0,:,int(md['Nx']/2)])/4
-nbins = 129
-
-check_data = th1_xz[0,:,int(md['Nx']/2)]
-plot_min = -1
-plot_max = -1
-for j in range(md['Nz']):
-    if gzf[j] < md['H'] and gzf[j+1] > md['H']:
-        plot_min = j
-    if check_data[j-1] <= b_max and check_data[j] >= b_max:
-        plot_max = j
-
-if plot_min == -1: print("Warning: plot_min miscalculated")
-if plot_max == -1: print("Warning: plot_max miscalculated")
-
-bbins, db = np.linspace(b_min, b_max, nbins, retstep=True)
-bins = [0 for i in range(nbins)]
-
-zt_pdf = compute_pdf(z_coords[plot_min:plot_max], th2_xz[-1][plot_min:plot_max], gzf[plot_min:plot_max])
-
 
 ##### ---------------------- #####
 
@@ -645,25 +657,25 @@ late_R = R[35:40]
 popt, _ = curve_fit(R_fit, early_t, early_R)
 ax[2].plot(early_t, R_fit(early_t, *popt), color='k', linestyle='--')
 ax[2].plot(early_t, early_R)
-print("Early: ",  popt[1])
+#print("Early: ",  popt[1])
 
 popt, _ = curve_fit(R_fit, mid_t, mid_R)
 ax[2].plot(mid_t, R_fit(mid_t, *popt), color='k', linestyle='--')
 ax[2].plot(mid_t, mid_R)
-print("Mid: ",  popt[1])
+#print("Mid: ",  popt[1])
 
 popt, _ = curve_fit(R_fit, late_t, late_R)
 ax[2].plot(late_t, R_fit(late_t, *popt), color='k', linestyle='--')
 ax[2].plot(late_t, late_R)
-print("Late: ",  popt[1])
+#print("Late: ",  popt[1])
 
 v = np.gradient(mean_data, 0.5*(times[1:]+times[:-1]))
 t_min = get_index(4, 0.5*(times[1:]+times[:-1]))
 t_max = get_index(5, 0.5*(times[1:]+times[:-1]))
 v_intrusion = np.mean(v[t_min:t_max])
-print("(exp) Initial intrusion speed: ", round(v_intrusion,5))
-print("(THRESH the)", v_intrusion/(Mf(zn)/Qf(zn)))
-print("(FULL the)", v_intrusion/(Mff(zn)/Qff(zn)))
+#print("(exp) Initial intrusion speed: ", round(v_intrusion,5))
+#print("(THRESH the)", v_intrusion/(Mf(zn)/Qf(zn)))
+#print("(FULL the)", v_intrusion/(Mff(zn)/Qff(zn)))
 
 fig1, ax1 = plt.subplots(1,2)
 X, Y = np.meshgrid(times[:int(len(times)/3)], gz)
@@ -675,18 +687,23 @@ ax1[1].plot(times[1:int(len(times)/3)], heights)
 zmax_exp = np.max(heights)
 print("(exp) Max penetration height: ", round(zmax_exp,5))
 
-fig2 = plt.figure()
-plt.title("TESTING: tracer vs. height pdf")
-plt.plot(zt_pdf, gz[plot_min:plot_max-1])
-zn_exp = gz[plot_min:plot_max][np.argmax(zt_pdf)]
-print("(exp) Neutral buoyancy height: ", round(zn_exp,5))
+
+fig3, ax3 = plt.subplots(1,2)
+plt.title("TESTING: neutral buoyancy height")
+avg_tracer = np.mean(th2_xz[:,plot_min:plot_max,int(md['Nx']/2):],axis=0)
+avg_tracer_thresh = np.where(avg_tracer > 0.001, 1, 0)
+ax3[0].imshow(avg_tracer_thresh[::-1])
+ax3[1].plot(np.argmin(avg_tracer_thresh, axis=1),gzf[plot_min:plot_max])
+edges = np.argmin(avg_tracer_thresh, axis=1)
+peak = np.argwhere(edges == np.max(edges)).flatten()
+zn = np.mean(gzf[plot_min:plot_max][peak])
 
 axs[0].axhline(zn_exp*z_factor, color='k', alpha=0.5)
 axs[1].axhline(zn_exp*z_factor, color='k', alpha=0.5)
 axs[2].axhline(zn_exp*z_factor, color='k', alpha=0.5)
 
-print("(THRESH exp)", v_intrusion/(Mf(zn_exp)/Qf(zn_exp)))
-print("(FULL exp)", v_intrusion/(Mff(zn_exp)/Qff(zn_exp)))
+#print("(THRESH exp)", v_intrusion/(Mf(zn_exp)/Qf(zn_exp)))
+#print("(FULL exp)", v_intrusion/(Mff(zn_exp)/Qff(zn_exp)))
 
 if save_data:
     print("Saving data...")

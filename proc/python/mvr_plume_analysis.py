@@ -3,6 +3,7 @@ from os import listdir
 from os.path import isfile, join
 import numpy as np
 from math import sqrt
+import matplotlib.patheffects as pe
 import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
@@ -14,10 +15,10 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 ##### USER-DEFINED PARAMETERS #####
 params_file = "./params.dat"
-#save_loc = "/home/cwp29/Documents/plume_project/figs/mvr/"
-save = False
+save_loc = "/home/cwp29/Documents/4report/figs/mvr/"
+save = True
 title = False
-show = True
+show = False
 
 z_upper = 70 # non-dim, scaled by r_0
 z_lower = 35
@@ -62,6 +63,9 @@ def truncate(var, points, ref_var, ref, trunc_indices, display=False):
 
 ##### Get directory locations #####
 base_dir, run_dir, save_dir, version = read_params(params_file)
+base_dir = '/home/cwp29/diablo3/plume_fawcett/'
+save_dir = '/home/cwp29/diablo3/plume_fawcett/'
+run_dir = '/home/cwp29/diablo3/plume_fawcett/'
 print("Run directory: ", run_dir)
 print("Save directory: ", save_dir)
 
@@ -367,15 +371,16 @@ xi = np.cbrt(np.trace(b3,axis1=1,axis2=2)/6)
 # Set up colourbar for height z
 cols = plt.cm.rainbow(np.linspace(0,1,len(plume_indices)))
 sm = plt.cm.ScalarMappable(cmap='rainbow',
-        norm=plt.Normalize(vmin=np.min(gzf[plume_indices]),vmax=np.max(gzf[plume_indices])))
+        norm=plt.Normalize(vmin=np.min(gzf[plume_indices])/r_0,vmax=np.max(gzf[plume_indices])/r_0))
 
 ##### ----------------------- #####
+factor = 0.6
 
-fig0, axs = plt.subplots(1,3,figsize=(10, 6))
+fig0, axs = plt.subplots(1,3,figsize=(10, 5))
 if title: fig0.suptitle("Plume integral quantities Q, M, F")
-axs[0].plot(Q, gzf/r_0, label="Thresholded", color='b', linestyle='--')
-axs[1].plot(M, gzf/r_0, label="Thresholded", color='b', linestyle='--')
-axs[2].plot(F, gzf/r_0, label="Thresholded", color='b', linestyle='--')
+axs[0].plot(Q, factor*gzf/r_0, label="Thresholded", color='b', linestyle='--')
+axs[1].plot(M, factor*gzf/r_0, label="Thresholded", color='b', linestyle='--')
+axs[2].plot(F, factor*gzf/r_0, label="Thresholded", color='b', linestyle='--')
 
 analytic_Q = lambda z,a,z0: a*(z-z0)**(5/3)
 analytic_M = lambda z,a,z0: a*(z-z0)**(4/3)
@@ -385,34 +390,40 @@ poptQ, _ = optimize.curve_fit(analytic_Q, gzf[plume_indices], Q[plume_indices])
 poptM, _ = optimize.curve_fit(analytic_M, gzf[plume_indices], M[plume_indices])
 poptF, _ = optimize.curve_fit(analytic_F, gzf[plume_indices], F[plume_indices])
 
-axs[0].plot(poptQ[0]*np.power(gzf-poptQ[1],5/3), gzf/r_0, color='r')
-axs[1].plot(poptM[0]*np.power(gzf-poptM[1],4/3), gzf/r_0, color='r')
+axs[0].plot(poptQ[0]*np.power(gzf-poptQ[1],5/3), factor*gzf/r_0, color='r')
+axs[1].plot(poptM[0]*np.power(gzf-poptM[1],4/3), factor*gzf/r_0, color='r')
 axs[2].axvline(poptF[0], color='r')
 
-axs[0].axhline(z_upper, color='grey', linestyle='--')
-axs[0].axhline(z_lower, color='grey', linestyle='--')
+axs[0].axhline(factor*z_upper, color='grey', linestyle='--')
+axs[0].axhline(factor*z_lower, color='grey', linestyle='--')
+axs[1].axhline(factor*z_upper, color='grey', linestyle='--')
+axs[1].axhline(factor*z_lower, color='grey', linestyle='--')
+axs[2].axhline(factor*z_upper, color='grey', linestyle='--')
+axs[2].axhline(factor*z_lower, color='grey', linestyle='--')
 
-axs[0].plot(Q_full, gzf/r_0,label="Full",color='b')
-axs[1].plot(M_full, gzf/r_0,label="Full",color='b')
-axs[2].plot(F_full, gzf/r_0,label="Full",color='b')
+axs[0].plot(Q_full, factor*gzf/r_0,label="Full",color='b')
+axs[1].plot(M_full, factor*gzf/r_0,label="Full",color='b')
+axs[2].plot(F_full, factor*gzf/r_0,label="Full",color='b')
 axs[0].set_xlim(0,1.1*max(max(Q),max(Q_full)))
-axs[0].set_ylim(0,md['LZ']/r_0)
+axs[0].set_ylim(0,factor*md['LZ']/r_0)
 axs[1].set_xlim(0,1.1*max(max(M),max(M_full)))
-axs[1].set_ylim(0,md['LZ']/r_0)
+axs[1].set_ylim(0,factor*md['LZ']/r_0)
 axs[2].set_xlim(0,1.1*max(max(F),max(F_full)))
-axs[2].set_ylim(0,md['LZ']/r_0)
+axs[2].set_ylim(0,factor*md['LZ']/r_0)
 axs[0].set_ylabel("$z/r_0$")
 axs[1].set_ylabel("$z/r_0$")
 axs[2].set_ylabel("$z/r_0$")
+
 nticks = 5
 ticks = np.linspace(0,md['LZ']/r_0,nticks)
-axs[0].set_yticks(ticks)
+axs[0].set_yticks(factor*ticks)
 axs[0].set_yticklabels([str(int(i)) for i in ticks])
-axs[1].set_yticks(ticks)
+axs[1].set_yticks(factor*ticks)
 axs[1].set_yticklabels([str(int(i)) for i in ticks])
-axs[2].set_yticks(ticks)
+axs[2].set_yticks(factor*ticks)
 axs[2].set_yticklabels([str(int(i)) for i in ticks])
 axs[0].legend()
+
 #axs[1].legend()
 #axs[2].legend()
 axs[0].set_title("Q, volume flux")
@@ -427,56 +438,63 @@ if save: fig0.savefig(save_loc+'fig0.png', dpi=300)
 
 ##### ----------------------- #####
 # display threshold radius, theoretical radius w/ MvR et al coefficient, non-dimensionalised radius
+factor = 0.6
 
-fig7, ax7 = plt.subplots(1,2,figsize=(12,10))
+fig7, ax7 = plt.subplots(1,2,figsize=(12,7))
 if title: fig7.suptitle("Fig 1(a): ensemble and azimuthally \n averaged plume with radii scales")
-w_im = ax7[0].imshow(np.flip(wbar,axis=0),cmap='seismic',extent=[0, md['LX']/(r_0), 0, md['LZ']/r_0])
+w_im = ax7[0].imshow(np.flip(wbar,axis=0),cmap='seismic',extent=[0, md['LX']/(r_0), 0, factor*md['LZ']/r_0])
 w_im.set_clim(-1,1)
-ax7[0].plot([2*i/r_0 for i in r_d], gzf[cont_valid_indices]/r_0, color='r',label="threshold radius")
+ax7[0].plot([2*i/r_0 for i in r_d], factor*gzf[cont_valid_indices]/r_0, color='r',label="threshold radius")
 ax7[0].plot([2*analytic_r(gzf[i],0.105,z_virt)/r_0 for i in cont_valid_indices],
-        gzf[cont_valid_indices]/r_0, color='k', linestyle='--', label="analytic radius (MvR)")
-ax7[0].plot(2*r_m[cont_valid_indices]/r_0, gzf[cont_valid_indices]/r_0, color='blue',
+        factor*gzf[cont_valid_indices]/r_0, color='k', linestyle='--', label="analytic radius (MvR)")
+ax7[0].plot(2*r_m[cont_valid_indices]/r_0, factor*gzf[cont_valid_indices]/r_0, color='blue',
         label="$r_m$")
 ax7[0].plot([2*analytic_r(gzf[i], alpha_p, z_virt)/r_0 for i in cont_valid_indices],
-        gzf[cont_valid_indices]/r_0, color='k', label="analytic radius (diablo)")
+        factor*gzf[cont_valid_indices]/r_0, color='k', label="analytic radius (diablo)")
 ax7[0].legend()
 ax7[0].set_title("w")
 ax7[0].set_xlabel("$r/r_0$")
 ax7[0].set_ylabel("$z/r_0$")
 ax7[0].set_xlim(0,md['LX']/r_0)
-ax7[0].set_ylim(0,md['LZ']/r_0)
-ax7[0].axhline((md['Lyc']+md['Lyp'])/r_0, color='gray', alpha=0.5)
-ax7[0].text(35, 0.5+(md['Lyc']+md['Lyp'])/r_0, "Forcing")
+ax7[0].set_ylim(0,factor*md['LZ']/r_0)
+ax7[0].axhline(factor*(md['Lyc']+md['Lyp'])/r_0, color='gray', alpha=0.5)
+ax7[0].text(35, 0.5+factor*(md['Lyc']+md['Lyp'])/r_0, "Forcing region")
 nticks = 5
 ticks = np.linspace(0,md['LX']/r_0,nticks)
 ax7[0].set_xticks(ticks)
 ax7[0].set_xticklabels([str(int(i/2)) for i in ticks])
-ax7[0].axhline(z_upper, color='gray', alpha=0.5,linestyle='--')
-ax7[0].axhline(z_lower, color='gray', alpha=0.5,linestyle='--')
+ticks = np.linspace(0,md['LZ']/r_0,nticks)
+ax7[0].set_yticks(factor*ticks)
+ax7[0].set_yticklabels([str(int(i)) for i in ticks])
+ax7[0].axhline(factor*z_upper, color='gray', alpha=0.5,linestyle='--')
+ax7[0].axhline(factor*z_lower, color='gray', alpha=0.5,linestyle='--')
 
-b_im = ax7[1].imshow(np.flip(bbar,axis=0),cmap='seismic',extent=[0, md['LX']/(r_0), 0, md['LZ']/r_0])
+b_im = ax7[1].imshow(np.flip(bbar,axis=0),cmap='seismic',extent=[0, md['LX']/(r_0), 0, factor*md['LZ']/r_0])
 b_im.set_clim(-0.15,0.15)
-ax7[1].plot([2*i/r_0 for i in r_d], gzf[cont_valid_indices]/r_0, color='r',label="threshold radius")
+ax7[1].plot([2*i/r_0 for i in r_d], factor*gzf[cont_valid_indices]/r_0, color='r',label="threshold radius")
 ax7[1].set_title("b")
 ax7[1].plot([2*analytic_r(gzf[i],0.105,z_virt)/r_0 for i in cont_valid_indices],
-        gzf[cont_valid_indices]/r_0, color='k', linestyle='--', label="analytic radius (MvR)")
-ax7[1].plot(2*r_m[cont_valid_indices]/r_0, gzf[cont_valid_indices]/r_0, color='blue',
+        factor*gzf[cont_valid_indices]/r_0, color='k', linestyle='--', label="analytic radius (MvR)")
+ax7[1].plot(2*r_m[cont_valid_indices]/r_0, factor*gzf[cont_valid_indices]/r_0, color='blue',
         label="$r_m$")
 ax7[1].plot([2*analytic_r(gzf[i], alpha_p, z_virt)/r_0 for i in cont_valid_indices],
-        gzf[cont_valid_indices]/r_0, color='k', label="analytic radius (diablo)")
+        factor*gzf[cont_valid_indices]/r_0, color='k', label="analytic radius (diablo)")
 ax7[1].legend()
 ax7[1].set_xlabel("$r/r_0$")
 ax7[1].set_ylabel("$z/r_0$")
 ax7[1].set_xlim(0,md['LX']/r_0)
-ax7[1].set_ylim(0,md['LZ']/r_0)
-ax7[1].axhline((md['Lyc']+md['Lyp'])/r_0, color='gray', alpha=0.5)
-ax7[1].text(35, 0.5+(md['Lyc']+md['Lyp'])/r_0, "Forcing")
+ax7[1].set_ylim(0,factor*md['LZ']/r_0)
+ax7[1].axhline(factor*(md['Lyc']+md['Lyp'])/r_0, color='gray', alpha=0.5)
+ax7[1].text(35, 0.5+factor*(md['Lyc']+md['Lyp'])/r_0, "Forcing region")
 nticks = 5
 ticks = np.linspace(0,md['LX']/r_0,nticks)
 ax7[1].set_xticks(ticks)
 ax7[1].set_xticklabels([str(int(i/2)) for i in ticks])
-ax7[1].axhline(z_upper, color='gray', alpha=0.5,linestyle='--')
-ax7[1].axhline(z_lower, color='gray', alpha=0.5,linestyle='--')
+ticks = np.linspace(0,md['LZ']/r_0,nticks)
+ax7[1].set_yticks(factor*ticks)
+ax7[1].set_yticklabels([str(int(i)) for i in ticks])
+ax7[1].axhline(factor*z_upper, color='gray', alpha=0.5,linestyle='--')
+ax7[1].axhline(factor*z_lower, color='gray', alpha=0.5,linestyle='--')
 
 plt.tight_layout()
 if save: fig7.savefig(save_loc+'fig7.png', dpi=300)
@@ -561,7 +579,9 @@ if save: fig8.savefig(save_loc+'fig8.png', dpi=300)
 
 ##### ----------------------- #####
 
-fig2, axs2 = plt.subplots(1,2, figsize=(11,5))
+rs = np.linspace(0, 2, 1000)
+
+fig2, axs2 = plt.subplots(1,2, figsize=(11,3.5))#, facecolor=(0.9,0.9,0.9))
 if title: fig2.suptitle("Fig 4(c),(f): self-similar profiles of $\overline{w}, \overline{b}, \overline{u'w'}, \overline{u'b'}$")
 for i in plume_indices:
     if i == plume_indices[0]:
@@ -576,6 +596,7 @@ for i in plume_indices:
         axs2[0].plot(r_points/r_m[i], bbar[i]/b_m[i],color='red',linestyle='dashed')
         axs2[1].plot(r_points/r_m[i], uflucwflucbar[i]/(w_m[i]*w_m[i]), color='blue')
         axs2[1].plot(r_points/r_m[i], uflucbflucbar[i]/(w_m[i]*b_m[i]), color='red', linestyle='dashed')
+
 axs2[0].set_xlim(0, 2)
 axs2[0].set_xlabel("$r/r_m$")
 axs2[0].legend()
@@ -583,22 +604,36 @@ axs2[1].set_xlim(0,2)
 axs2[1].set_xlabel("$r/r_m$")
 axs2[1].legend()
 
+#for text in l1.get_texts():
+    #text.set_color(blue)
+#for text in l2.get_texts():
+    #text.set_color(blue)
+
 nticks = 5
 ticks = np.linspace(0,2,nticks)
 axs2[1].set_xticks(ticks)
 axs2[1].set_xticklabels(["{0:.1f}".format(i) for i in ticks])
 axs2[0].set_xticks(ticks)
 axs2[0].set_xticklabels(["{0:.1f}".format(i) for i in ticks])
-axs2[0].grid(color='grey', alpha=0.5)
-axs2[1].grid(color='grey', alpha=0.5)
+#axs2[0].grid(color='grey', alpha=0.5)
+#axs2[1].grid(color='grey', alpha=0.5)
+
+#axs2[0].tick_params(color=blue, labelcolor=blue)
+#axs2[1].tick_params(color=blue, labelcolor=blue)
+
+#for spine in axs2[0].spines.values():
+    #spine.set_edgecolor(blue)
+#for spine in axs2[1].spines.values():
+    #spine.set_edgecolor(blue)
 
 fig2.tight_layout()
 if save: fig2.savefig(save_loc+'fig2.png', dpi=300)
+fig2.savefig(save_loc+'wb_uw_ub.png', dpi=300)
 
 
 ##### ----------------------- #####
 
-fig3, axs3 = plt.subplots(1,2,figsize=(12,5))
+fig3, axs3 = plt.subplots(1,2,figsize=(12,3.5))
 if title: fig3.suptitle("Fig 5 (a), (b): self-similar profiles of $\overline{u}, r\overline{u}$")
 for i,c in zip(plume_indices,cols):
     axs3[0].plot(r_points/r_m[i], ubar[i]/w_m[i],color=c)
