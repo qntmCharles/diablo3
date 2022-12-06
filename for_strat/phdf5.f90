@@ -434,7 +434,7 @@ end subroutine WriteStatH5_X
 !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 subroutine WriteHDF5_RYplane(fname, gname, var2d)
   !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
-  ! Writes out entire X-Y plane
+  ! Writes out entire R-Y plane
   use hdf5
 
   character(len=35) fname
@@ -586,7 +586,151 @@ subroutine WriteHDF5_RYplane(fname, gname, var2d)
 
 end subroutine WriteHDF5_RYplane
 
+!----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+subroutine WriteHDF5_plane(fname, gname, var2d)
+  !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+  ! Writes out entire X-Y plane
+  use hdf5
 
+  character(len=35) fname
+
+  ! Dataset names
+  character(len=20) :: gname, dname
+
+  ! Identifiers
+  integer(hid_t) :: file_id, dset_id
+  integer(hid_t) :: filspace_id, memspace_id
+
+  ! Identifiers
+  integer(hid_t) :: gid, selspace_id
+  integer(hid_t) :: plist_id_d
+
+  ! Dimensions in the memory and in the file
+  integer(hsize_t), dimension(2) :: dimsm, dimsf
+
+  integer :: rHDF5 = 2
+  integer(hsize_t), dimension(1)       :: adims
+  integer(hid_t)                      :: aid, tspace
+
+  real(rkind), intent(inout) :: var2d(:, :)
+  integer nsamp
+  logical flage
+
+  integer(hsize_t), dimension(2) :: count, offset
+  integer(hsize_t), dimension(2) :: stride, block, offset_m
+
+  ! integer(hsize_t)  ::  my_dim
+  integer Error, i, j
+
+  ! *********************
+  ! START DEFINITION
+  ! *********************
+
+  dimsm(1:2) = (/size(var2d, 1), size(var2d, 2)/)
+  dimsf(1:2) = (/size(var2d, 1), size(var2d, 2)/)
+
+  block(1) = size(var2d, 1)
+  block(2) = size(var2d, 2)
+
+  ! Stride and count for number of rows and columns in each dimension
+  stride = 1
+  count = 1
+
+  ! Offset determined by the rank of a processor
+  offset(1:2) = 0
+  offset_m(1:2) = 0
+  
+  ! *********************
+  ! FINISH DEFINITION
+  ! *********************
+
+  ! Initialize interface
+  call h5open_f(Error)
+
+  ! Setup file access property list with parallel I/O access
+  call h5pcreate_f(h5p_file_access_f, plist_id_d, Error)
+  !call h5pset_fapl_mpio_f(plist_id_d, mpi_comm_y%mpi_val, &
+                          !mpi_info_null%mpi_val, Error)
+
+  inquire (file=trim(fname), exist=flage)
+  if (.not. flage) then
+    ! Create the file collectively
+    call h5fcreate_f(trim(fname), h5f_acc_trunc_f, &
+                     file_id, Error, access_prp=plist_id_d)
+    call h5fclose_f(file_id, Error)
+  end if
+
+  ! Create the file collectively
+  call h5fopen_f(trim(fname), h5f_acc_rdwr_f, &
+                 file_id, Error, access_prp=plist_id_d)
+  call h5pclose_f(plist_id_d, Error)
+
+  ! Create property list for collective dataset write
+  call h5pcreate_f(h5p_dataset_xfer_f, plist_id_d, Error)
+  !call h5pset_dxpl_mpio_f(plist_id_d, h5fd_mpio_collective_f, &
+                          !Error)
+
+  call h5screate_f(h5s_scalar_f, tspace, Error)
+
+  ! Open the right group or create if it does not exist
+  adims = 1
+  call h5lexists_f(file_id, "/"//trim(gname), flage, Error)
+  if (.not. flage) then
+    call h5gcreate_f(file_id, gname, gid, Error)
+
+    call h5acreate_f(gid, 'SAMPLES', h5t_std_i32le, &
+                     tspace, aid, Error)
+    nsamp = 0;
+    call h5awrite_f(aid, h5t_native_integer, nsamp, adims, Error)
+    call h5aclose_f(aid, Error)
+  else
+    call h5gopen_f(file_id, "/"//trim(gname), gid, Error)
+    call h5aopen_f(gid, 'SAMPLES', aid, Error)
+    call h5aread_f(aid, h5t_native_integer, nsamp, adims, Error)
+    call h5aclose_f(aid, Error)
+  end if
+
+  nsamp = nsamp + 1
+
+  write (dname, '(1I0.4)') nsamp
+
+  call h5screate_simple_f(rHDF5, dimsf, filspace_id, Error)
+  call h5screate_simple_f(rHDF5, dimsm, memspace_id, Error)
+
+  call h5sselect_hyperslab_f(filspace_id, h5s_select_set_f, &
+                             offset, count, Error, stride, block)
+  call h5sselect_hyperslab_f(memspace_id, h5s_select_set_f, &
+                             offset_m, count, Error, stride, block)
+
+  call h5aopen_f(gid, 'SAMPLES', aid, Error)
+  call h5awrite_f(aid, h5t_native_integer, nsamp, adims, Error)
+  call h5aclose_f(aid, Error)
+
+  call h5dcreate_f(gid, dname, h5t_ieee_f64le, &
+                   filspace_id, dset_id, Error)
+
+  ! Write the dataset collectively
+  call h5dwrite_f(dset_id, h5t_native_double, &
+                  var2d, &
+                  dimsm, Error, file_space_id=filspace_id, &
+                  mem_space_id=memspace_id, xfer_prp=plist_id_d)
+
+  call h5acreate_f(dset_id, 'Time', h5t_ieee_f64le, tspace, &
+                   aid, Error)
+  call h5awrite_f(aid, h5t_ieee_f64le, time, adims, Error)
+  call h5aclose_f(aid, Error)
+
+  call h5dclose_f(dset_id, Error)
+
+  call h5sclose_f(filspace_id, Error)
+  call h5sclose_f(memspace_id, Error)
+  call h5pclose_f(plist_id_d, Error)
+
+  call h5gclose_f(gid, Error)
+  call h5fclose_f(file_id, Error)
+  call h5close_f(Error)
+
+end subroutine WriteHDF5_plane
 
 !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 subroutine WriteHDF5_XYplane(fname, gname, var2d)

@@ -48,7 +48,7 @@ program diablo
   use flow
   use tools
 
-  integer n
+  integer i, j, k, n
   logical flag
 
   call init_parameters
@@ -83,6 +83,7 @@ program diablo
     call end_run_mpi(flag)
 
 
+
     ! Save statistics to an output file
     if (time >= save_stats_time) then
 
@@ -115,6 +116,37 @@ program diablo
       previous_time_step = time_step
 
     end if
+
+    do n = 1, N_th
+      call fft_xz_to_physical(cth(:,:,:,n), th(:,:,:,n))
+    end do
+    call fft_xz_to_physical(cu2, u2)
+
+    s1 = th(:,:,:,1)
+    s2 = th(:,:,:,2)
+    s3 = u2(:,:,:)
+
+    ! Update scatter plot flux weightings
+    call tracer_density_flux(s1, s2, s3, NyMovie, weights_flux)
+    weights_flux_cum = weights_flux_cum + weights_flux
+
+    ! Store the old scalars in th_mem
+    do n = 1, N_th
+      do j = 1, Nyp
+        do i = 0, Nxm1
+          do k = 0, Nzp - 1
+            th_mem(i, k, j, n) = th(i, k, j, n)
+          end do
+        end do
+      end do
+    end do
+    ! Store dt
+    dt_mem = dt
+
+    do n = 1, N_th
+      call fft_xz_to_fourier(th(:,:,:,n), cth(:,:,:,n))
+    end do
+    call fft_xz_to_fourier(u2, cu2)
 
     ! Save entire flow to a file (Only really a restart file if end.h5)
     if (time >= save_flow_time) then

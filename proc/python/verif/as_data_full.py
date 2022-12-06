@@ -207,17 +207,6 @@ for i in cont_valid_indices:
     r_integrate[i, rtrunc+1] = f(wtrunc)
     r_integrate[i, rtrunc+2] = f(wtrunc)
 
-"""
-    fig = plt.figure()
-    plt.title("z={0:.6f}".format(gzf[i]))
-    plt.plot(r_points, wbar[i, :])
-    plt.plot(r_integrate[i], wbar_trunc[i])
-    plt.axvline(f(wtrunc), color='gray', linestyle='--', alpha=0.5)
-    plt.axvline(r_points[rtrunc], color='gray', linestyle=':', alpha=0.5)
-    plt.axhline(wtrunc, color='red', linestyle='--', alpha=0.5)
-    plt.show()
-"""
-
 bbar_trunc = truncate(bbar, r_points, wbar, eps*wbar[:,0], cont_valid_indices)
 wflucbflucbar_trunc = truncate(wflucbflucbar, r_points, wbar, eps*wbar[:,0], cont_valid_indices)
 pbar_trunc = truncate(pbar, r_points, wbar, eps*wbar[:,0], cont_valid_indices)
@@ -291,19 +280,6 @@ M_factor = 1 / (F0 * np.power(N, -1))
 ##### ---------------------- #####
 
 fig0, axs = plt.subplots(1,3,figsize=(13, 5))
-"""
-axs[0].plot(Q*Q_factor, gzf*z_factor, label="Simulation (thresholded)", color='b', linestyle='--')
-axs[1].plot(M*M_factor, gzf*z_factor, label="Thresholded", color='b', linestyle='--')
-axs[2].plot(F*F_factor, gzf*z_factor, label="Thresholded", color='b', linestyle='--')
-
-axs[0].plot(Q_full*Q_factor, gzf*z_factor, label="Simulation (full)", color='b', linestyle=':')
-axs[1].plot(M_full*M_factor, gzf*z_factor, label="Full", color='b', linestyle=':')
-axs[2].plot(F_full*F_factor, gzf*z_factor, label="Full", color='b', linestyle=':')
-
-axs[0].axvline(Qf(zstar)*Q_factor, linestyle='--', color='grey')
-axs[1].axvline(Mf(zstar)*M_factor, linestyle='--', color='grey')
-axs[2].axvline(Ff(zstar)*F_factor, linestyle='--', color='grey')
-"""
 
 axs[0].plot(Q, gzf, label="Simulation (thresholded)", color='b', linestyle='--')
 axs[1].plot(M, gzf, label="Thresholded", color='b', linestyle='--')
@@ -367,32 +343,6 @@ def rhs_Bf(z, fluxes):
             B_factor*Bff(z/z_factor)/(theta_m_avg*beta_g_avg),
             -(N2f(z/z_factor)/N2)*fluxes[0]*(theta_m_avg/theta_g_avg)]
 
-"""
-def rhs_Qt(z, fluxes):
-    return [2*Q_factor*Qf(z/z_factor)*fluxes[1]/(theta_m_avg*theta_g_avg),
-            -(N2f(z/z_factor)/N2)*Q_factor*Qf(z/z_factor)*(theta_m_avg/theta_g_avg)]
-
-def rhs_Qf(z, fluxes):
-    return [2*Q_factor*Qff(z/z_factor)*fluxes[1]/(theta_m_avg*theta_g_avg),
-            -(N2f(z/z_factor)/N2)*Q_factor*Qff(z/z_factor)*(theta_m_avg/theta_g_avg)]
-
-def rhs_Mt(z, fluxes):
-    return [2*alpha_p*np.power(M_factor*Mf(z/z_factor), 1/2)
-            -(N2f(z/z_factor)/N2)*fluxes[0]*(theta_m_avg/theta_g_avg)]
-
-def rhs_Mf(z, fluxes):
-    return [2*alpha_p*np.power(M_factor*Mff(z/z_factor), 1/2)
-            -(N2f(z/z_factor)/N2)*fluxes[0]*(theta_m_avg/theta_g_avg)]
-
-def rhs_Ft(z, fluxes):
-    return [2*alpha_p*np.power(fluxes[1], 1/4),
-            2*fluxes[0]*F_factor*Ff(z/z_factor)/(theta_m_avg*theta_g_avg)]
-
-def rhs_Ff(z, fluxes):
-    return [2*alpha_p*np.power(fluxes[1], 1/4),
-            2*fluxes[0]*F_factor*Fff(z/z_factor)/(theta_m_avg*theta_g_avg)]
-"""
-
 # Events for numerical solution
 def max_penetration_height(t, y): return y[1]
 max_penetration_height.terminal = True
@@ -418,32 +368,6 @@ res_Bt = solve_ivp(rhs_Bt, (z_factor*zstar, z_factor*0.3),
         [Q_factor*Qf(zstar), M_factor * Mf(zstar), F_factor*Ff(zstar)],
         events=[max_penetration_height,neutral_buoyancy_height],
         method='Radau', t_eval=plot_points)
-
-"""
-res_Qt = solve_ivp(rhs_Qt, (z_factor*zstar, z_factor*0.3),
-        [M_factor**2 * Mf(zstar)**2, F_factor*Ff(zstar)],
-        method='Radau')
-
-res_Qf = solve_ivp(rhs_Qf, (z_factor*zstar, z_factor*0.3),
-        [M_factor**2 * Mff(zstar)**2, F_factor*Fff(zstar)],
-        method='Radau')
-
-res_Mt = solve_ivp(rhs_Mt, (z_factor*zstar, z_factor*0.3),
-        [Q_factor*Qf(zstar), F_factor*Ff(zstar)],
-        method='Radau')
-
-res_Mf = solve_ivp(rhs_Mf, (z_factor*zstar, z_factor*0.3),
-        [Q_factor*Qff(zstar), F_factor*Fff(zstar)],
-        method='Radau')
-
-res_Ft = solve_ivp(rhs_Ft, (z_factor*zstar, z_factor*0.3),
-        [Q_factor*Qf(zstar), M_factor**2 * Mf(zstar)**2],
-        method='Radau')
-
-res_Ff = solve_ivp(rhs_Ff, (z_factor*zstar, z_factor*0.3),
-        [Q_factor*Qff(zstar), M_factor**2 * Mff(zstar)**2],
-        method='Radau')
-"""
 
 if res_t.success:
     plot_points_t = np.linspace(zstar*z_factor, res_t.t_events[0][0], 1000)
@@ -473,13 +397,12 @@ else:
     zmax_theory = res_f.t[-1]/z_factor
     plot_points_f = np.linspace(zstar*z_factor, res_f.t[-1], 1000)
 
-print("Non-dimensional max height (theory): ",zmax_theory)
-print("Dimensional: ",zmax_theory*z_factor)
+print("Max height (theory): ",zmax_theory)
 
 #print("(the) Neutral buoyancy height: ",round(res_f.t_events[1][0]/z_factor,5))
 zn_theory = res_f.t_events[1][0]/z_factor
-print("Non-dimensional neutral buoyancy height (theory): ",zn_theory)
-print("Dimensional: ",zn_theory*z_factor)
+axs[1].axhline(res_f.t_events[1][0], color='k', linestyle='-.')
+print("Neutral buoyancy height (theory): ",zn_theory)
 #print("(THRESH the) Neutral buoyancy height: ",round(res_t.t_events[1][0]/z_factor,5))
 
 res_t = solve_ivp(rhs_t, (z_factor*zstar, z_factor*0.3),
@@ -491,12 +414,6 @@ res_f = solve_ivp(rhs_f, (z_factor*zstar, z_factor*0.3),
         events=[max_penetration_height,neutral_buoyancy_height],
         method='Radau', dense_output=True, t_eval=plot_points_f)
 
-
-#print("(THRESH the) Mn = ",Mf(zn))
-#print("(THRESH the) Qn = ",Qf(zn))
-#print("(FULL the) Mn = ",Mff(zn))
-#print("(FULL the) Qn = ",Qff(zn))
-
 axs[0].plot(res_t.y[0]/Q_factor, res_t.t/z_factor, label="MTT numerical soln (thresholded)", color='r', linestyle='--')
 axs[1].plot(np.sqrt(res_t.y[1])/M_factor, res_t.t/z_factor, color='r', linestyle='--')
 axs[2].plot(res_t.y[2]/F_factor, res_t.t/z_factor, color='r', linestyle='--')
@@ -504,38 +421,6 @@ axs[2].plot(res_t.y[2]/F_factor, res_t.t/z_factor, color='r', linestyle='--')
 axs[0].plot(res_f.y[0]/Q_factor, res_f.t/z_factor, label="MTT numerical soln (full)", color='r', linestyle=':')
 axs[1].plot(np.sqrt(res_f.y[1])/M_factor, res_f.t/z_factor, color='r', linestyle=':')
 axs[2].plot(res_f.y[2]/F_factor, res_f.t/z_factor, color='r', linestyle=':')
-
-#axs[0].plot(res_Bt.y[0], res_Bt.t, label="Numerical, exp B (non-dim, thresholded)", color='m', linestyle='--')
-#axs[1].plot(res_Bt.y[1], res_Bt.t, color='m', linestyle='--')
-#axs[2].plot(res_Bt.y[2], res_Bt.t, color='m', linestyle='--')
-
-#axs[0].plot(res_Bf.y[0], res_Bf.t, label="Numerical, exp B (non-dim, full)", color='m', linestyle=':')
-#axs[1].plot(res_Bf.y[1], res_Bf.t, color='m', linestyle=':')
-#axs[2].plot(res_Bf.y[2], res_Bf.t, color='m', linestyle=':')
-
-"""
-axs[1].plot(np.sqrt(res_Qt.y[0]), res_Qt.t, color='m', linestyle='--')
-axs[2].plot(res_Qt.y[1], res_Qt.t, color='m', label="Numerical, Q exp (non-dim, thresholded)",
-        linestyle='--')
-
-axs[1].plot(np.sqrt(res_Qf.y[0]), res_Qf.t, color='m', linestyle=':')
-axs[2].plot(res_Qf.y[1], res_Qf.t, color='m', label="Numerical, Q exp (non-dim, full)", linestyle=':')
-
-axs[0].plot(res_Mt.y[0], res_Mt.t, color='c', linestyle='--')
-axs[2].plot(res_Mt.y[1], res_Mt.t, color='c', label="Numerical, M exp (non-dim, thresholded)",
-        linestyle='--')
-
-axs[0].plot(res_Mf.y[0], res_Mf.t, color='c', linestyle=':')
-axs[2].plot(res_Mf.y[1], res_Mf.t, color='c', label="Numerical, M exp (non-dim, full)", linestyle=':')
-
-axs[0].plot(res_Ft.y[0], res_Ft.t, color='y', linestyle='--')
-axs[1].plot(np.sqrt(res_Ft.y[1]), res_Ft.t, color='y', linestyle='--',
-        label="Numerical, F exp (non-dim, thresholded)")
-
-axs[0].plot(res_Ff.y[0], res_Ff.t, color='y', linestyle=':')
-axs[1].plot(np.sqrt(res_Ff.y[1]), res_Ff.t, color='y', linestyle=':',
-        label="Numerical, F exp (non-dim, full)")
-"""
 
 ##### ---------------------- #####
 
@@ -559,10 +444,6 @@ F_theory_upper = F0 - 0.25 * N2 * np.power(0.9*alpha, 4/3) * \
 
 F_theory_lower = F0*np.ones_like(gzf_lower)
 
-#axs[1].plot(M_theory, gzf, label="Full", color='r', linestyle=':')
-#axs[2].plot(F_theory_lower, gzf_lower, label="NEW", color='r', linestyle=':')
-#axs[2].plot(F_theory_upper, gzf_upper, label="NEW", color='r', linestyle=':')
-
 def rhs_theory(z, fluxes):
     return [2*Q_factor*Qft(z/z_factor)*fluxes[1],
             -(N2f(z/z_factor)/N2)*Q_factor*Qft(z/z_factor)]
@@ -571,30 +452,14 @@ res_Qtheory = solve_ivp(rhs_theory, (z_factor*zstar, z_factor*0.3),
         [M_factor**2 * Mf(zstar)**2, F_factor*Ff(zstar)],
         method='Radau', t_eval = plot_points)
 
-#axs[0].plot(Q_theory_plot*Q_factor, gzf[:ztop_index]*z_factor, label="NEW", color='r', linestyle='--')
-#axs[1].plot(np.sqrt(res_Qtheory.y[0]), res_Qtheory.t, color='r', linestyle='--')
-#axs[2].plot(res_Qtheory.y[1], res_Qtheory.t, color='r', linestyle='--')
 
 
 axs[0].legend()
-#axs[1].legend()
-#axs[2].legend()
+axs[0].set_ylabel("z (m)")
 
-#axs[0].set_ylim(z_factor*zstar/1.5, z_factor*0.3)
-#axs[1].set_ylim(z_factor*zstar/1.5, z_factor*0.3)
-#axs[2].set_ylim(z_factor*zstar/1.5, z_factor*0.3)
-#axs[0].set_ylim(10, 18)
-#axs[1].set_ylim(10, 18)
-#axs[2].set_ylim(10, 18)
 axs[0].set_ylim(0.8*md['H'], 1.4*md['H'])
 axs[1].set_ylim(0.8*md['H'], 1.4*md['H'])
 axs[2].set_ylim(0.8*md['H'], 1.4*md['H'])
-
-axs[0].set_ylabel("z (m)")
-
-#axs[0].set_xlim(-1, 6)
-#axs[1].set_xlim(-1, 10)
-#axs[2].set_xlim(-5, 3)
 
 plt.tight_layout()
 
@@ -633,7 +498,7 @@ print("(exp) Neutral buoyancy height: ", round(zn_exp,5))
 
 ##### ---------------------- #####
 
-tracer_thresh = 2e-3
+tracer_thresh = 1e-3
 tracer_data_horiz = th2_xz[1:, zn_index, :]
 tracer_data_vert = th2_xz[1:, :, int(md['Nx']/2)]
 

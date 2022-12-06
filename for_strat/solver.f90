@@ -77,12 +77,29 @@
         do k=0, Nzp-1
           do i=0, Nxm1
             call random_number(rnum1)
-            s1(i,k,j) = (th(i,k,j,n) - 2*b_m(j) * & 
-              exp(-((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0) / &
-              (2.d0*r_m(j)**2.d0)) * &
-              (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
-              (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / & 
-              tau_sponge
+            if ((n == 2).and.(f_type == 7)) then
+              s1(i,k,j) = (th(i,k,j,n) - b_m(j) * &
+                   (tanh((sqrt((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0)+2*r_m(j))/1.d-3) - &
+                    tanh((sqrt((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0)-2*r_m(j))/1.d-3)) * &
+                (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
+                (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / &
+                tau_sponge
+            else if ((n == 2).and.(f_type == 8)) then
+              s1(i,k,j) = (th(i,k,j,n) - 2*b_m(j) * &
+                exp(-((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp + k)-Lz/2.d0)**2.d0) / &
+                (2.d0*r_m(j)**2.d0)) * &
+                cos(sqrt((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp + k)-Lz/2.d0)**2.d0))**2.d0 * &
+                (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
+                (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / &
+                tau_sponge
+            else
+              s1(i,k,j) = (th(i,k,j,n) - 2*b_m(j) * & 
+                exp(-((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0) / &
+                (2.d0*r_m(j)**2.d0)) * &
+                (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
+                (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / & 
+                tau_sponge
+            end if
             if (n > 2) then 
               s1(i,k,j) = 0.d0 
             end if
@@ -547,6 +564,10 @@ subroutine rk_chan_1
   ! f_type=2 -> Oscillatory pressure gradient in the x-direction
   ! f_type=4 -> Oscillatory surface forcing on the top (to cu3)
   ! else -> No forcing added
+  !
+  ! f_type=3 -> Gaussian forcing profile
+  ! f_type=7 -> tanh forcing profile
+  ! f_type=8 -> sin forcing profile
   if (f_type == 1) then
     ! Add forcing for a constant pressure gradient
     do j = jstart, jend
@@ -1379,18 +1400,18 @@ subroutine rk_chan_1
   end if
 
   ! for debugging velocity and buoyancy data
-  if (rk_step == 3) then 
-    do i = 0, Nxm1
-      do k = 0, Nzp - 1
-        do j = 1, 5
-          if ((rankY == 0) .and. ((time_step < 5) .and. (rankZ*Nzp+k == Nx/2))) write(*,*) 'WDATA', &
-            gz(rankZ*Nzp+k), gyf(j), gx(i), u2(i,k,j)
-          if ((rankY == 0) .and. ((time_step < 5) .and. (rankZ*Nzp+k == Nx/2))) write(*,*) 'BDATA', &
-            gz(rankZ*Nzp+k), gyf(j), gx(i), th(i,k,j,1) 
-        end do
-      end do
-    end do
-  end if
+  !if (rk_step == 3) then 
+    !do i = 0, Nxm1
+      !do k = 0, Nzp - 1
+        !do j = 1, 5
+          !if ((rankY == 0) .and. ((time_step < 5) .and. (rankZ*Nzp+k == Nx/2))) write(*,*) 'WDATA', &
+            !gz(rankZ*Nzp+k), gyf(j), gx(i), u2(i,k,j)
+          !if ((rankY == 0) .and. ((time_step < 5) .and. (rankZ*Nzp+k == Nx/2))) write(*,*) 'BDATA', &
+            !gz(rankZ*Nzp+k), gyf(j), gx(i), th(i,k,j,1) 
+        !end do
+      !end do
+    !end do
+  !end if
 
   ! Transform TH and U to Fourier Space
   call fft_xz_to_fourier(u1, cu1)

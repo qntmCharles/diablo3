@@ -58,7 +58,6 @@ module parameters
   real(rkind) omega0, amp_omega0, force_start
   real(rkind) w_BC_Ymax_c1_transient
 
-
   ! Numerical parameters
   real(rkind)  h_bar(3), beta_bar(3), zeta_bar(3) ! For RK
   integer  time_ad_meth
@@ -73,6 +72,18 @@ module parameters
 
   ! Forcing parameters
   real (rkind) tau_sponge
+
+  ! Scatter plot parameters
+  integer Nb, Nphi
+
+  real(rkind) b_factor, phi_factor
+  real(rkind) phi_min, phi_max, b_min, b_max, db, dphi
+
+  real(rkind) source_vol, vol
+
+  real(rkind), allocatable :: bbins(:), phibins(:)
+  real(rkind), pointer, contiguous, dimension(:,:) :: weights, weights_flux, weights_flux_cum
+ 
 
   ! Timestep memory
   real(rkind) TIME_LAST
@@ -131,7 +142,6 @@ contains
       read (11, *) Ri(n), Pr(n)
     end do
 
-
     ! Initialize MPI Variables
     call init_mpi
 
@@ -158,6 +168,8 @@ contains
       call input_chan
       call create_grid_chan
       call init_chan_mpi
+      write(*,*) "H", H
+      YcMovie = 0.95d0 * H
       if (save_movie_dt /= 0) then
         call init_chan_movie
       end if
@@ -172,7 +184,7 @@ contains
     test_rank = -1
     if ((Lyc+Lyp < gy(Nyp)) .and. (gy(0) < Lyc+Lyp)) then
       test_rank = rankY
-      write(*,*) test_rank
+      !write(*,*) test_rank
     end if
 
     if (rankY == test_rank) then
@@ -230,7 +242,7 @@ contains
     open (11, file='input_chan.dat', form='formatted', status='old')
     ! Read input file.
 
-    current_version = 3.6
+    current_version = 3.8
     read (11, *)
     read (11, *)
     read (11, *)
@@ -262,6 +274,8 @@ contains
     read (11, *)
     read (11, *) Svel_amp, Sb_amp, S_depth
     read (11, *)
+    read (11, *) Nb, Nphi, b_factor, phi_factor
+    read (11, *)
     read (11, *)
     read (11, *) u_BC_Ymin, u_BC_Ymin_c1
     read (11, *)
@@ -292,6 +306,31 @@ contains
     zvirt = -r0/(1.2d0 * alpha_e)
     F0 = (r0**2.d0) * b0
 
+    ! Set up scatter plot arrays
+    b_min = 0.d0
+    b_max = b_factor * N2 * (LY - H)
+    phi_min = 5.d-4
+    phi_max = phi_factor * 5.d0*F0 / (3.d0*alpha_e) * ((0.9d0 * alpha_e * F0)**(-1.d0/3.d0)) * &
+                              ((H + 5.d0*r0/(6.d0*alpha_e))**(-5.d0/3.d0))
+
+    db = (b_max - b_min) / Nb
+    dphi = (phi_max - phi_min) / Nphi
+   
+    allocate (bbins(1:Nb))
+    allocate (phibins(1:Nb))
+    allocate (weights(1:Nb, 1:Nphi))
+    allocate (weights_flux(1:Nb, 1:Nphi))
+    allocate (weights_flux_cum(1:Nb, 1:Nphi))
+
+    do i = 1, Nb
+      bbins(i) = b_min + (i-0.5d0)*db
+      if (rank == 0) write(*,*) "BBIN", i, bbins(i)
+    end do
+
+    do i = 1, Nphi
+      phibins(i) = phi_min + (i-0.5d0)*dphi
+      if (rank == 0) write(*,*) "PHIBIN", i, phibins(i)
+    end do
 
     ! Compensate no-slip BC in the GS flow direction due to dTHdx
     !   AND also define dTHdx & dTHdz

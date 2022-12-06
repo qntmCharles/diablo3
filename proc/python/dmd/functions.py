@@ -1,11 +1,5 @@
 import h5py
 import numpy as np
-from matplotlib import pyplot as plt
-from os.path import join
-from scipy import integrate
-
-def get_index(z, griddata):
-    return int(np.floor(np.argmin(np.abs(griddata - z))))
 
 def read_params(param_file):
     params = [i.strip() for i in open(param_file)]
@@ -39,9 +33,6 @@ def get_metadata(run_dir, version):
     params = ["LX", "LY", "LZ", "RE", "SAVE_MOVIE_DT", "SAVE_STATS_DT", "SAVE_FLOW_DT", "VERSION"]
     chan_params = ["r0", "alpha_e", "b0", "Lyc", "Lyp", "S_depth", "N2", "H", "Q0"]
     grid_params = ["Nx", "Ny", "Nz", "Nth"]
-    if version == "3.8":
-        chan_params = ["r0", "alpha_e", "b0", "Lyc", "Lyp", "S_depth", "N2", "H",
-                "Q0","b_factor", "phi_factor", "Nb", "Nphi","F_TYPE"]
 
     for params_file, parameters in zip(["/input.dat", "/input_chan.dat"],[params,chan_params]):
         with open(run_dir+params_file, 'r') as f:
@@ -100,22 +91,20 @@ def get_grid(grid_file, md, fractional_grid=True):
     else:
         return gx, gy, gz, gz[1:]-gz[:-1]
 
-def get_az_data(data_file, md, tstart_ind=0, verbose=True):
+def get_az_data(data_file, md):
     data_dict = {}
     with h5py.File(data_file,'r') as f:
-        if verbose: print("Data keys: %s"%f.keys())
+        print("Data keys: %s"%f.keys())
 
         # Time data
         time_keys = list(f['u_az'].keys())
-        time_keys = time_keys[tstart_ind:]
 
-        # (u,v,w,b,p,t) data
+        # (u,v,w,b,p) data
         u_az = f['u_az']
         v_az = f['v_az']
         w_az = f['w_az']
         b_az = f['b_az']
         p_az = f['p_az']
-        th_az = f['th_az']
 
         # Spatial fluctuations
         uu_sfluc = f['uu_sfluc']
@@ -129,7 +118,7 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
         bb_sfluc = f['bb_sfluc']
 
         ##### Calculate time averages ######
-        if verbose: print("Calculating time averages...")
+        print("Calculating time averages...")
 
         # Initialise
         if u_az[time_keys[0]].attrs['Time'] == 0: # if file starts at t=0, skip first dataset
@@ -139,15 +128,14 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
             t_start = u_az[time_keys[0]].attrs['Time']-md['SAVE_STATS_DT']
         t_end = u_az[time_keys[-1]].attrs['Time']
         t_run = t_end - t_start
-        if verbose: print(t_run)
+        print(t_run)
 
-        if verbose: print("Computing t = {0:.4f}".format(u_az[time_keys[0]].attrs['Time']))
+        print("Computing t = {0:.4f}".format(u_az[time_keys[0]].attrs['Time']))
         ubar = u_az[time_keys[0]][()]*md['SAVE_STATS_DT']
         vbar = v_az[time_keys[0]][()]*md['SAVE_STATS_DT']
         wbar = w_az[time_keys[0]][()]*md['SAVE_STATS_DT']
         bbar = b_az[time_keys[0]][()]*md['SAVE_STATS_DT']
         pbar = p_az[time_keys[0]][()]*md['SAVE_STATS_DT']
-        thbar = th_az[time_keys[0]][()]*md['SAVE_STATS_DT']
 
         uu_sfluc_bar = uu_sfluc[time_keys[0]][()]*md['SAVE_STATS_DT']
         uv_sfluc_bar = uv_sfluc[time_keys[0]][()]*md['SAVE_STATS_DT']
@@ -164,13 +152,12 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
             t_key = time_keys[i]
             dt = u_az[t_key].attrs['Time'] - u_az[time_keys[i-1]].attrs['Time']
 
-            if verbose: print("Computing t = {0:.4f}".format(u_az[t_key].attrs['Time']))
+            print("Computing t = {0:.4f}".format(u_az[t_key].attrs['Time']))
             ubar += u_az[t_key][()]*dt
             vbar += v_az[t_key][()]*dt
             wbar += w_az[t_key][()]*dt
             bbar += b_az[t_key][()]*dt
             pbar += p_az[t_key][()]*dt
-            thbar += th_az[t_key][()]*dt
 
             uu_sfluc_bar += uu_sfluc[t_key][()]*dt
             uv_sfluc_bar += uv_sfluc[t_key][()]*dt
@@ -187,14 +174,12 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
         wbar /= t_run
         bbar /= t_run
         pbar /= t_run
-        thbar /= t_run
 
         data_dict['u'] = ubar
         data_dict['v'] = vbar
         data_dict['w'] = wbar
         data_dict['p'] = pbar
         data_dict['b'] = bbar
-        data_dict['th'] = thbar
 
         uu_sfluc_bar /= t_run
         uv_sfluc_bar /= t_run
@@ -207,8 +192,8 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
         bb_sfluc_bar /= t_run
 
         # Initialise
-        if verbose: print("Calculating fluctuations...")
-        if verbose: print("Computing t = {0:.4f}".format(u_az[time_keys[0]].attrs['Time']))
+        print("Calculating fluctuations...")
+        print("Computing t = {0:.4f}".format(u_az[time_keys[0]].attrs['Time']))
         u_tfluc = u_az[time_keys[0]][()] - ubar
         v_tfluc = v_az[time_keys[0]][()] - vbar
         w_tfluc = w_az[time_keys[0]][()] - wbar
@@ -229,7 +214,7 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
             t_key = time_keys[i]
             dt = u_az[t_key].attrs['Time'] - u_az[time_keys[i-1]].attrs['Time']
 
-            if verbose: print("Computing t = {0:.4f}".format(u_az[t_key].attrs['Time']))
+            print("Computing t = {0:.4f}".format(u_az[t_key].attrs['Time']))
             u_tfluc = u_az[t_key][()] - ubar
             v_tfluc = v_az[t_key][()] - vbar
             w_tfluc = w_az[t_key][()] - wbar
@@ -276,37 +261,3 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
         data_dict['bfluc2'] = bfluc2bar
 
     return data_dict
-
-def g2gf_1d(md, var):
-    dx = md['LX']/md['Nx']
-
-    var_rft = np.fft.rfft(var, axis=-1)
-    xfreq = np.fft.rfftfreq(md['Nx']) * 2.j * np.pi * md['Nx'] / md['LX']
-
-    kernel = np.exp(xfreq * dx/2)
-    var_irft = np.fft.irfft(kernel * var_rft, axis=-1)
-
-    return var_irft
-
-def compute_F0(f, md, tstart_ind = 0, verbose=True, tracer=True):
-    dr = md['LX']/md['Nx']
-    nbins = int(md['Nx']/2)
-    r_bins = np.array([r*dr for r in range(0, nbins+1)])
-    r_points = np.array([0.5*(r_bins[i]+r_bins[i+1]) for i in range(nbins)])
-
-    data = get_az_data(join(f,'az_stats.h5'), md, tstart_ind = tstart_ind, verbose=verbose)
-    wbar = data['w']
-    bbar = data['b']
-    tbar = data['th']
-
-    if tracer:
-        F0_int = integrate.trapezoid(r_points * tbar * wbar, x=r_points, axis=-1)
-    else:
-        F0_int = integrate.trapezoid(r_points * bbar * wbar, x=r_points, axis=-1)
-
-    _, _, gzf, _ = get_grid(join(f,'grid.h5'), md)
-
-    z_bottom = get_index(md['Lyc'] + md['Lyp'], gzf)
-    z_top = get_index(0.9*md['H'], gzf)
-
-    return np.mean(F0_int[z_bottom:z_top])

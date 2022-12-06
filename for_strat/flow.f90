@@ -16,8 +16,8 @@ module flow
                                                            cv_sfluc, cw_sfluc, cb_sfluc
 
   ! 4D
-  real(rkind), pointer, contiguous, dimension(:,:,:,:) :: th,fth,rth
-  complex(rkind), pointer, contiguous, dimension(:,:,:,:) :: cth,cfth,crth
+  real(rkind), pointer, contiguous, dimension(:,:,:,:) :: th,fth,rth, th_mem
+  complex(rkind), pointer, contiguous, dimension(:,:,:,:) :: cth,cfth,crth, cth_mem
 
 
 
@@ -80,6 +80,8 @@ module flow
   complex(rkind)  cuu1_yx(0:Nyp+1,0:Nxp-1)
 
   real(rkind) epsilon(0:Nyp+1), epsilon_m(0:Nyp+1)
+ 
+  real(rkind) dt_mem
 
 
 
@@ -205,6 +207,7 @@ contains
     call alloc_array4D(th, cth)   ! Not using the same memory!
     call alloc_array4D(fth,cfth)
     call alloc_array4D(rth,crth)
+    call alloc_array4D(th_mem,cth_mem)
 
   end
 
