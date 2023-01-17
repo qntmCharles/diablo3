@@ -1,4 +1,5 @@
-# Script loads in 2D slices and produces a movie of the simulation output import numpy as np import h5py, gc
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0],".."))
 import h5py
 import numpy as np
 from matplotlib import pyplot as plt
@@ -32,8 +33,11 @@ with h5py.File(save_dir+"/movie.h5", 'r') as f:
     time_keys = list(f['th1_xy'])
     print(time_keys)
     # Get buoyancy data
-    th1_xy = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
-    th1_zy = np.array([np.array(f['th2_xz'][t]) for t in time_keys])
+    #th1_xy = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
+    #th1_zy = np.array([np.array(f['th2_xz'][t]) for t in time_keys])
+
+    th1_xy = np.array([np.array(f['chi1_xz'][t]) for t in time_keys])
+    th1_zy = np.array([np.array(f['diapycvel1_xz'][t]) for t in time_keys])
 
     th1_xy = g2gf_1d(md, th1_xy)
     th1_zy = g2gf_1d(md, th1_zy)
@@ -42,7 +46,7 @@ with h5py.File(save_dir+"/movie.h5", 'r') as f:
     times = np.array([float(f['th1_xz'][tstep].attrs['Time']) for tstep in time_keys])
     f.close()
 
-th1_xy -= th1_xy[0]
+#th1_xy -= th1_xy[0]
 print("Total time steps: %s"%NSAMP)
 print("Dimensional times: ",times)
 
@@ -61,7 +65,10 @@ axs[1].axhline(md['Lyc']+md['Lyp'],color='white', linestyle=':')
 
 cb[0] = plt.colorbar(ims[0],ax=axs[0])
 cb[1] = plt.colorbar(ims[1],ax=axs[1])
-#ims[0].set_clim(0, md['N2']*(md['LY']-md['H']))
+#ims[0].set_clim(0, .5*md['N2']*(md['LY']-md['H']))
+ims[0].set_clim(0, 2.5e-7)
+
+ims[1].set_clim(-4e-2, 4e-2)
 
 r0 = md['r0']
 F0 = md['b0'] * r0**2
@@ -78,8 +85,14 @@ axs[1].set_ylabel("$z$")
 axs[0].set_xlabel("$x$")
 axs[1].set_xlabel("$y$")
 
-axs[0].set_ylim(md['H'], md['H']+0.15)
-axs[1].set_ylim(md['H'], md['H']+0.15)
+axs[0].set_ylim(md['H'], md['LY'])
+axs[1].set_ylim(md['H'], md['LY'])
+
+axs[0].set_xlim(0.2, 0.4)
+axs[1].set_xlim(0.2, 0.4)
+
+axs[0].set_aspect(1)
+axs[1].set_aspect(1)
 
 def animate(step):
     ims[0].set_array(th1_xy[step].ravel())

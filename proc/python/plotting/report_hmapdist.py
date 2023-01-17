@@ -1,3 +1,5 @@
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0],".."))
 import h5py, gc, sys
 import numpy as np
 from scipy.interpolate import griddata
@@ -286,6 +288,12 @@ print(bt_pdfs.shape)
 bt_pdfs = np.swapaxes(bt_pdfs, axis1=1, axis2=0)
 zt_pdfs = np.swapaxes(zt_pdfs, axis1=1, axis2=0)
 
+print(bt_pdfs.shape)
+times_h = times_h[:80]
+bt_pdfs = bt_pdfs[:,:80]
+zt_pdfs = zt_pdfs[:,:80]
+print(bt_pdfs.shape)
+
 X, Y = np.meshgrid(np.append(times_h, times_h[-1]+md['SAVE_STATS_DT']), gz[plot_min:plot_max])
 cols = plt.cm.rainbow(np.linspace(0, 1, NSAMP))
 fig = plt.figure()
@@ -300,26 +308,32 @@ plt.ylabel("height")
 bfig = plt.figure()
 plt.plot(b_h[0,:,0], gzf)
 
-fig, ax = plt.subplots(1,2, figsize=(12, 3))
+fig, ax = plt.subplots(1,2, figsize=(12, 3.5), constrained_layout=True)
 
 X, Y = np.meshgrid(np.append(times_h, times_h[-1]+md['SAVE_STATS_DT']), bbins)
 bt_im = ax[0].pcolormesh(X, Y, bt_pdfs, shading='flat', cmap=plt.cm.get_cmap('viridis'))
+X, Y = np.meshgrid(times_h+md['SAVE_STATS_DT']/2, (bbins[1:]+bbins[:-1])/2)
+bt_cont = ax[0].contour(X, Y, bt_pdfs, levels=[0.4], colors='r', alpha=0.7)
+
+bt_cbar = plt.colorbar(bt_im, ax=ax[0], label="tracer conc. (arbitary units)")
+bt_cbar.add_lines(bt_cont)
 
 X, Y = np.meshgrid(np.append(times_h, times_h[-1]+md['SAVE_STATS_DT']), gz[plot_min:plot_max])
 zt_im = ax[1].pcolormesh(X, Y, zt_pdfs, cmap=plt.cm.get_cmap('viridis'))
+plt.colorbar(zt_im, ax=ax[1], label="tracer conc. (arbitary units)")
 
 t_step = int(round(5.0 / md['SAVE_STATS_DT'], 0))
-for i in range(0, NSAMP, t_step):
+for i in range(0, 80, t_step):
     ax[0].axvline(times_h[i], linestyle='--', color='gray', alpha=0.5)
     ax[1].axvline(times_h[i], linestyle='--', color='gray', alpha=0.5)
 
-ax[0].set_title("PDF of tracer vs. buoyancy")
+ax[0].set_title("tracer vs. buoyancy heatmap")
 ax[0].set_xlabel("time (s)")
-ax[0].set_ylabel("buoyancy")
-ax[1].set_title("PDF of tracer vs. height")
+ax[0].set_ylabel(r"buoyancy ($m\,s^{-2}$)")
+ax[1].set_title("tracer vs. height heatmap")
 ax[1].set_xlabel("time (s)")
-ax[1].set_ylabel("height")
+ax[1].set_ylabel("height (m)")
 
-plt.tight_layout()
-#fig.savefig('/home/cwp29/Documents/4report/figs/hmap.png', dpi=200)
+#plt.tight_layout()
+fig.savefig('/home/cwp29/Documents/essay/figs/hmap.png', dpi=300)
 plt.show()

@@ -1,3 +1,5 @@
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0],".."))
 # Script loads in 2D slices and produces a movie of the simulation output import numpy as np import h5py, gc
 import h5py
 import numpy as np
@@ -37,8 +39,8 @@ with h5py.File(save_dir+"/movie.h5", 'r') as f:
     # Get buoyancy data
     th1_xz = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
     th2_xz = np.array([np.array(f['th2_xz'][t]) for t in time_keys])
-    th1_xz = g2gf_1d(th1_xz)
-    th2_xz = g2gf_1d(th2_xz)
+    th1_xz = g2gf_1d(md,th1_xz)
+    th2_xz = g2gf_1d(md,th2_xz)
     NSAMP = len(th1_xz)
     times = np.array([float(f['th1_xz'][t].attrs['Time']) for t in time_keys])
     f.close()
@@ -81,8 +83,8 @@ axs[0].set_aspect(1)
 axs[1].set_aspect(1)
 axs[2].set_aspect(1)
 
-cb_waves = fig.colorbar(im0_w, ax = axs[2], location='right', shrink=0.7, label="$\\partial_t N^2$")
-cb_plume = fig.colorbar(im0_t, ax = axs[2], location='right', shrink=0.7, label="tracer")
+cb_waves = fig.colorbar(im0_w, ax = axs[2], location='right', shrink=0.7, label=r"$\partial_t N^2 \, (s^{-3})$")
+cb_plume = fig.colorbar(im0_t, ax = axs[2], location='right', shrink=0.7, label="tracer concentration")
 
 
 im0_w.set_clim(-0.2,0.2)
@@ -94,16 +96,16 @@ im2_t.set_clim(0, 5e-2)
 
 axs[0].set_xlabel("$x$ (m)")
 axs[0].set_ylabel("$z$ (m)")
-axs[0].set_title("(a) $t = {0:.2f} s$".format(times[step1]))
+axs[0].set_title("(a) t = {0:.2f} s".format(times[step1]))
 
 axs[1].set_xlabel("$x$ (m)")
 axs[1].set_ylabel("$z$ (m)")
-axs[1].set_title("(b) $t = {0:.2f} s$".format(times[step2]))
+axs[1].set_title("(b) t = {0:.2f} s".format(times[step2]))
 
 axs[2].set_xlabel("$x$ (m)")
 axs[2].set_ylabel("$z$ (m)")
-axs[2].set_title("(c) $t = {0:.2f} s$".format(times[step3]))
+axs[2].set_title("(c) t = {0:.2f} s".format(times[step3]))
 
 now = datetime.now()
-#plt.savefig('/home/cwp29/Documents/4report/figs/evolution.png', dpi=200)
+plt.savefig('/home/cwp29/Documents/essay/figs/evolution.png', dpi=200)
 plt.show()

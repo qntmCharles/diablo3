@@ -89,7 +89,7 @@ for d in dirs:
     bs.append(th1_xz)
     ts.append(th2_xz)
     ws.append(w_xz)
-    Fs.append(compute_F0(join(save_dir, d), md, tstart_ind = get_index(3, times), verbose=False,tracer=True))
+    Fs.append(compute_F0(join(save_dir, d), md, tstart_ind = get_index(3, times), verbose=False,tracer=False))
     scatters.append(scatter)
     scatter_fluxes.append(scatter_flux)
     scatter_correcteds.append(scatter_corrected)

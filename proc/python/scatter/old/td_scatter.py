@@ -65,9 +65,9 @@ alpha = md['alpha_e']
 tmin = 0
 tmax = 5*F0 / (3 * alpha) * np.power(0.9*alpha*F0, -1/3) * np.power(md['H']+ 5*md['r0']/(6*alpha), -5/3)
 
-Nb = 50
-Nt = 50
-db = round((bmax - bmin)/Nb,3)
+Nb = 51
+Nt = 51
+db = (bmax - bmin)/Nb
 dt = (tmax - tmin)/Nt
 bbins = [bmin + (i+0.5)*db for i in range(Nb)]
 tbins = [tmin + (i+0.5)*dt for i in range(Nt)]

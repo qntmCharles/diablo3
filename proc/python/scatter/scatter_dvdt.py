@@ -87,7 +87,7 @@ tmax = md['phi_factor']*5*F0 / (3 * alpha) * np.power(0.9*alpha*F0, -1/3) * np.p
 
 Nb = int(md['Nb'])
 Nt = int(md['Nphi'])
-db = round((bmax - bmin)/Nb,3)
+db = (bmax - bmin)/Nb
 dt = (tmax - tmin)/Nt
 dx = md['LX']/md['Nx']
 dy = md['LY']/md['Ny']

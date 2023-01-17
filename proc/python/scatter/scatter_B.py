@@ -7,8 +7,6 @@ from os.path import join
 from matplotlib import pyplot as plt
 import matplotlib
 import matplotlib.animation as animation
-import matplotlib.lines as mlines
-import matplotlib.patches as mpatches
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from datetime import datetime
 from functions import get_metadata, read_params, get_grid, g2gf_1d
@@ -65,7 +63,7 @@ with h5py.File(join(save_dir,"movie.h5"), 'r') as f:
     diapycvel = g2gf_1d(md,diapycvel)
     chi_b = np.array([np.array(f['chi1_xz'][t]) for t in time_keys])
     chi_b = g2gf_1d(md,chi_b)
-    chi_t = np.array([np.array(f['chi2_xz'][t]) for t in time_keys])
+    chi_t = np.array([np.array(f['chi1_xz'][t]) for t in time_keys])
     chi_t = g2gf_1d(md,chi_t)
 
     scatter = np.array([np.array(f['td_scatter'][t]) for t in time_keys])
@@ -119,9 +117,9 @@ Re_b = eps/((md['nu'] + nu_t)*np.abs(np.where(np.logical_and(z_coords < md['H'],
 Re_b = np.log(Re_b)
 eps = np.log(eps)
 
-field = Ri
-f_thresh = 0.25
-field_str = "Ri"
+field = B
+f_thresh = 1e-5
+field_str = "B"
 
 #########################################################
 # Restrict arrays
@@ -209,7 +207,7 @@ t_max = np.max(t[:,0,int(md['Nx']/2)])
 fig,ax = plt.subplots(2, 2, figsize=(15,8))
 fig.suptitle("time = 0.00 s")
 
-contours_b = np.linspace(0, np.max(b), 10)
+contours_b = np.linspace(0, bmax, 10)
 
 sx, sy = np.meshgrid(bbins, tbins)
 
@@ -242,24 +240,24 @@ for i in range(int(md['Nb'])):
 trac_im = ax[0,0].pcolormesh(X, Y, test_array, cmap=s_cmap, norm=s_norm)
 b_cont = ax[0,0].contour(Xf, Yf, np.where(t[-1] <= 5e-4, b[-1], np.NaN),
             levels = contours_b, cmap='cool', alpha=0.8)
-b_cont_fill = ax[0,0].contourf(b_cont, levels = contours_b, cmap='cool', alpha=0.8, extend='min')
+b_cont_fill = ax[0,0].contourf(b_cont, levels = contours_b, cmap='cool', alpha=0.8)
 t_cont = ax[0,0].contour(Xf, Yf, t[-1], levels = [5e-4], colors='green', alpha=0.8)
 
 #########################################################
 
-ax[0,1].set_title("Highlighted regions: (t,b) volume where {0} <= {1}".format(field_str, f_thresh))
-vol_im_thresh = ax[0,1].pcolormesh(X, Y, np.where(field[-1] <= f_thresh, test_array, np.NaN),
+ax[0,1].set_title("Highlighted regions: (t,b) volume where {0} > {1}".format(field_str, f_thresh))
+vol_im_thresh = ax[0,1].pcolormesh(X, Y, np.where(field[-1] > f_thresh, test_array, np.NaN),
     cmap=s_cmap, norm=s_norm)
-vol_im_threshc = ax[0,1].pcolormesh(X, Y, np.where(field[-1] > f_thresh, test_array, np.NaN),
+vol_im_threshc = ax[0,1].pcolormesh(X, Y, np.where(field[-1] <= f_thresh, test_array, np.NaN),
     cmap=s_cmap, norm=s_norm, alpha=0.2)
 vol_cont = ax[0,1].contour(Xf, Yf, field[-1], levels=[f_thresh], colors='g', alpha=0.5)
 
 ax[1,1].set_title("Highlighted regions: {0} where cumulative (t,b) volume negative".format(field_str))
 field_norm = plt.Normalize(0, f_thresh)
 field_im_thresh = ax[1,1].pcolormesh(X, Y, np.where(test_array < 0, field[-1], np.NaN),
-    cmap='hot', norm=field_norm)
+    cmap='hot_r', norm=field_norm)
 field_im_threshc = ax[1,1].pcolormesh(X, Y, np.where(test_array > 0, field[-1], np.NaN),
-    cmap='hot', norm=field_norm, alpha=0.2)
+    cmap='hot_r', norm=field_norm, alpha=0.2)
 field_cont = ax[1,1].contour(Xf, Yf, np.where(test_array < 0, test_array, 1),
         levels=[0], colors='b', alpha=0.5)
 
@@ -306,7 +304,7 @@ ax[1,0].bar(vols_plot, field_vols/vol_vols, width=vols[1:]-vols[:-1],
 ax[1,0].bar(vols_plot, field_volsc/vol_vols, width=vols[1:]-vols[:-1], bottom=field_vols/vol_vols,
         label="{0} <= {1}".format(field_str, f_thresh))
 
-ax[1,0].legend(loc=1)
+ax[1,0].legend()
 ax[1,0].set_ylim(0,1)
 
 #########################################################
@@ -331,82 +329,92 @@ ax[0,1].set_xlim(0.1, 0.5)
 ax[1,1].set_xlim(0.1, 0.5)
 
 plt.tight_layout()
+plt.show()
 
 #############################################################################################################
 
-fig, ax = plt.subplots(1,2, figsize=(12, 3.5), constrained_layout=True)
-fig.set_constrained_layout_pads(wspace=0.05)
+def animate(step):
+    ax[0,0].clear()
+    ax[0,1].clear()
+    ax[1,0].clear()
+    ax[1,1].clear()
 
-#########################################################
+    test_array = np.zeros_like(t[step])
+    for i in range(int(md['Nb'])):
+        for j in range(int(md['Nphi'])):
+            test_array[np.logical_and(np.logical_and(b[step] > bbins[i] - db/2,
+                b[step] <= bbins[i] + db/2),np.logical_and(t[step] > tbins[j] - dt/2,
+                t[step] <= tbins[j] + dt/2))] = scatter_corrected[step,j,i]
 
-vols = np.linspace(-1e-5, 1.75e-5, 13)
-vols_plot = 0.5*(vols[1:]+vols[:-1])
+    trac_im = ax[0,0].pcolormesh(X, Y, test_array, cmap=s_cmap, norm=s_norm)
+    b_cont = ax[0,0].contour(Xf, Yf, np.where(t[step] <= 5e-4, b[step], np.NaN),
+                levels = contours_b, cmap='cool', alpha=0.8)
+    b_cont_fill = ax[0,0].contourf(b_cont, levels = contours_b, cmap='cool', alpha=0.8)
+    t_cont = ax[0,0].contour(Xf, Yf, t[step], levels = [5e-4], colors='green', alpha=0.8)
 
-field_vols = np.zeros_like(vols)[:-1]
-field_volsc = np.zeros_like(vols)[:-1]
-thresh_array = np.where(np.logical_and(field[-1] > f_thresh, t[-1] >=5e-4), test_array, np.NaN)
-threshc_array = np.where(np.logical_and(field[-1] <= f_thresh, t[-1] >= 5e-4), test_array, np.NaN)
+    #########################################################
 
-dx = gx[1:] - gx[:-1]
-dz = gz[1:] - gz[:-1]
+    ax[0,1].set_title("Highlighted regions: (t,b) volume where {0} > {1}".format(field_str, f_thresh))
+    vol_im_thresh = ax[0,1].pcolormesh(X, Y, np.where(field[step] > f_thresh, test_array, np.NaN),
+        cmap=s_cmap, norm=s_norm)
+    vol_im_threshc = ax[0,1].pcolormesh(X, Y, np.where(field[step] <= f_thresh, test_array, np.NaN),
+        cmap=s_cmap, norm=s_norm, alpha=0.2)
+    vol_cont = ax[0,1].contour(Xf, Yf, field[step], levels=[f_thresh], colors='g', alpha=0.5)
 
-dz = dz[idx_minf:idx_maxf]
-gdx, gdz = np.meshgrid(dx, dz)
-cell_vols = gdx * gdz * np.abs(gxf - md['LX']/2) # last factor corrects for radius
-print(cell_vols)
+    ax[1,1].set_title("Highlighted regions: {0} where cumulative (t,b) volume negative".format(field_str))
+    field_norm = plt.Normalize(0, f_thresh)
+    field_im_thresh = ax[1,1].pcolormesh(X, Y, np.where(test_array < 0, field[step], np.NaN),
+        cmap='hot_r', norm=field_norm)
+    field_im_threshc = ax[1,1].pcolormesh(X, Y, np.where(test_array > 0, field[step], np.NaN),
+        cmap='hot_r', norm=field_norm, alpha=0.2)
+    field_cont = ax[1,1].contour(Xf, Yf, np.where(test_array < 0, test_array, 1),
+            levels=[0], colors='b', alpha=0.5)
 
-thresh_vol = np.sum(cell_vols[~np.isnan(thresh_array)])
-threshc_vol = np.sum(cell_vols[~np.isnan(threshc_array)])
+    #########################################################
 
-for i in range(1,len(vols)-2):
-    field_vols[i] = np.nansum(np.where(np.logical_and(thresh_array >= vols[i], thresh_array < vols[i+1]),
-        cell_vols, np.NaN))
-field_vols[0] = np.nansum(np.where(thresh_array < vols[1], cell_vols, np.NaN))
-field_vols[-1] = np.nansum(np.where(thresh_array >= vols[-2], cell_vols, np.NaN))
+    field_vols = np.zeros_like(vols)[:-1]
+    thresh_array = np.where(np.logical_and(field[step] > f_thresh, t[step] >=5e-4), test_array, np.NaN)
+    threshc_array = np.where(np.logical_and(field[step] <= f_thresh, t[step] >= 5e-4), test_array, np.NaN)
 
-#ax[1].stairs(field_vols/thresh_vol, vols, color='r', label="{0} > {1}".format(field_str, f_thresh))
+    thresh_vol = np.sum(cell_vols[~np.isnan(thresh_array)])
+    threshc_vol = np.sum(cell_vols[~np.isnan(threshc_array)])
 
-for i in range(1,len(vols)-2):
-    field_volsc[i] = np.nansum(np.where(np.logical_and(threshc_array >= vols[i], threshc_array < vols[i+1]),
-        cell_vols, np.NaN))
-field_volsc[0] = np.nansum(np.where(threshc_array < vols[1], cell_vols, np.NaN))
-field_volsc[-1] = np.nansum(np.where(threshc_array >= vols[-2], cell_vols, np.NaN))
+    for i in range(1,len(vols)-2):
+        field_vols[i] = np.nansum(np.where(np.logical_and(thresh_array >= vols[i], thresh_array < vols[i+1]),
+            cell_vols, np.NaN))
+    field_vols[0] = np.nansum(np.where(thresh_array < vols[1], cell_vols, np.NaN))
+    field_vols[-1] = np.nansum(np.where(thresh_array >= vols[-2], cell_vols, np.NaN))
 
-vol_vols = field_vols + field_volsc
+    thresh_plot = ax[1,0].stairs(field_vols/thresh_vol, vols, color='r',
+            label="{0} > {1}".format(field_str, f_thresh))
 
-ax[1].bar(vols_plot, field_vols/vol_vols, width=vols[1:]-vols[:-1],
-        label=r"$\mathrm{Ri} > \frac{1}{4}$")
-ax[1].bar(vols_plot, field_volsc/vol_vols, width=vols[1:]-vols[:-1], bottom=field_vols/vol_vols,
-        label=r"$\mathrm{Ri} \leq \frac{1}{4}$")
+    for i in range(1,len(vols)-2):
+        field_vols[i] = np.nansum(np.where(np.logical_and(threshc_array >= vols[i], threshc_array < vols[i+1]),
+            cell_vols, np.NaN))
+    field_vols[0] = np.nansum(np.where(threshc_array < vols[1], cell_vols, np.NaN))
+    field_vols[-1] = np.nansum(np.where(threshc_array >= vols[-2], cell_vols, np.NaN))
 
-ax[1].legend(loc=1)
-ax[1].set_ylim(0,1)
-ax[1].set_xlim(vols[0], vols[-1])
-ax[1].set_xlabel(r"$\Omega \, (m^3)$")
-ax[1].set_ylabel("Volume proportion")
+    threshc_plot = ax[1,0].stairs(field_vols/threshc_vol, vols, color='b',
+            label="{0} <= {1}".format(field_str, f_thresh))
 
-#ax[0].set_title("Richardson number $\mathrm{{Ri}}$")
-field_norm = plt.Normalize(0, f_thresh)
-field_im_thresh = ax[0].pcolormesh(X, Y, np.where(test_array < 0, field[-1], np.NaN),
-    cmap='hot', norm=field_norm)
-field_im_threshc = ax[0].pcolormesh(X, Y, np.where(test_array > 0, field[-1], np.NaN),
-    cmap='hot', norm=field_norm, alpha=0.2)
-field_cont = ax[0].contour(Xf, Yf, np.where(test_array < 0, test_array, 1),
-        levels=[0], colors='b', alpha=0.5)
+    ax[1,0].set_ylim(0, 0.5)
+    ax[1,0].legend()
 
-div = make_axes_locatable(ax[0])
-cax = div.append_axes("right", size="5%", pad=0.05)
-plt.colorbar(field_im_thresh, cax=cax, label="Richardson number")
+    ax[0,0].set_xlim(0.1, 0.5)
+    ax[0,1].set_xlim(0.1, 0.5)
+    ax[1,1].set_xlim(0.1, 0.5)
 
-#bline = mlines.Line2D([], [], color='b', label="$\Omega < 0$")
-bline = mpatches.Patch(facecolor='white', edgecolor='b', label="$\Omega < 0$")
-ax[0].legend(handles=[bline])
+    fig.suptitle("time = {0:.2f} s".format(times[step]))
 
-ax[0].set_aspect(1)
-ax[0].set_xlim(0.2, 0.4)
-ax[0].set_xlabel(r"$x\,(m)$")
-ax[0].set_ylabel(r"$z\,(m)$")
+    return thresh_plot, threshc_plot, trac_im, field_im_thresh, field_im_threshc, vol_im_thresh, \
+        vol_im_threshc
 
-#plt.tight_layout()
-plt.savefig('/home/cwp29/Documents/essay/figs/Ri_vol.png', dpi=300)
+
+Writer = animation.writers['ffmpeg']
+writer = Writer(fps=4, bitrate=-1)
+
+anim = animation.FuncAnimation(fig, animate, interval=250, frames=NSAMP)
+now = datetime.now()
+#anim.save(save_dir+'scatter_Ri_%s.mp4'%now.strftime("%d-%m-%Y"),writer=writer)
+plt.tight_layout()
 plt.show()

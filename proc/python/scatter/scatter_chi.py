@@ -7,7 +7,6 @@ from os.path import join
 from matplotlib import pyplot as plt
 import matplotlib
 import matplotlib.animation as animation
-import matplotlib.lines as mlines
 import matplotlib.patches as mpatches
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from datetime import datetime
@@ -52,20 +51,12 @@ with h5py.File(join(save_dir,"movie.h5"), 'r') as f:
     u = g2gf_1d(md,u)
     v = np.array([np.array(f['v_xz'][t]) for t in time_keys])
     v = g2gf_1d(md,v)
-    w = np.array([np.array(f['w_xz'][t]) for t in time_keys])
-    w = g2gf_1d(md,w)
 
-    eps = np.array([np.array(f['epsilon_xz'][t]) for t in time_keys])
-    eps = g2gf_1d(md,eps)
-    kappa = np.array([np.array(f['kappa_t1_xz'][t]) for t in time_keys])
-    kappa = g2gf_1d(md,kappa)
-    nu_t = np.array([np.array(f['nu_t_xz'][t]) for t in time_keys])
-    nu_t = g2gf_1d(md,nu_t)
     diapycvel = np.array([np.array(f['diapycvel1_xz'][t]) for t in time_keys])
     diapycvel = g2gf_1d(md,diapycvel)
     chi_b = np.array([np.array(f['chi1_xz'][t]) for t in time_keys])
     chi_b = g2gf_1d(md,chi_b)
-    chi_t = np.array([np.array(f['chi2_xz'][t]) for t in time_keys])
+    chi_t = np.array([np.array(f['chi1_xz'][t]) for t in time_keys])
     chi_t = g2gf_1d(md,chi_t)
 
     scatter = np.array([np.array(f['td_scatter'][t]) for t in time_keys])
@@ -98,30 +89,11 @@ u_z = np.gradient(u, gzf, axis=1)
 v_z = np.gradient(v, gzf, axis=1)
 N2 = np.gradient(b, gzf, axis=1)
 
-# Get az data
-with h5py.File(join(save_dir,"az_stats.h5"), 'r') as f:
-    print("Keys: %s" % f.keys())
-    time_keys = list(f['u_az'].keys())
-    wbar = np.array([np.array(f['w_az'][t]) for t in time_keys])
-    bbar = np.array([np.array(f['b_az'][t]) for t in time_keys])
-
-wbar2 = np.concatenate((np.flip(wbar,axis=2), wbar), axis=2)
-wfluc = w-wbar2
-
-bbar2 = np.concatenate((np.flip(bbar,axis=2), bbar), axis=2)
-bfluc = b-bbar2
-
 Ri = 2*np.where(np.logical_and(z_coords < md['H'], b<1e-3), np.inf, N2)/(np.power(u_z, 2) + np.power(v_z, 2))
-e = kappa * diapycvel/md['N2']
-B = bfluc * wfluc
-eps *= (md['nu'] + nu_t)/md['nu']
-Re_b = eps/((md['nu'] + nu_t)*np.abs(np.where(np.logical_and(z_coords < md['H'], b<1e-3), 1e5, N2)))
-Re_b = np.log(Re_b)
-eps = np.log(eps)
 
-field = Ri
-f_thresh = 0.25
-field_str = "Ri"
+field = chi_b
+f_thresh = 1e-7
+field_str = "$\chi$"
 
 #########################################################
 # Restrict arrays
@@ -209,7 +181,7 @@ t_max = np.max(t[:,0,int(md['Nx']/2)])
 fig,ax = plt.subplots(2, 2, figsize=(15,8))
 fig.suptitle("time = 0.00 s")
 
-contours_b = np.linspace(0, np.max(b), 10)
+contours_b = np.linspace(0, bmax, 10)
 
 sx, sy = np.meshgrid(bbins, tbins)
 
@@ -242,24 +214,24 @@ for i in range(int(md['Nb'])):
 trac_im = ax[0,0].pcolormesh(X, Y, test_array, cmap=s_cmap, norm=s_norm)
 b_cont = ax[0,0].contour(Xf, Yf, np.where(t[-1] <= 5e-4, b[-1], np.NaN),
             levels = contours_b, cmap='cool', alpha=0.8)
-b_cont_fill = ax[0,0].contourf(b_cont, levels = contours_b, cmap='cool', alpha=0.8, extend='min')
+b_cont_fill = ax[0,0].contourf(b_cont, levels = contours_b, cmap='cool', alpha=0.8)
 t_cont = ax[0,0].contour(Xf, Yf, t[-1], levels = [5e-4], colors='green', alpha=0.8)
 
 #########################################################
 
-ax[0,1].set_title("Highlighted regions: (t,b) volume where {0} <= {1}".format(field_str, f_thresh))
-vol_im_thresh = ax[0,1].pcolormesh(X, Y, np.where(field[-1] <= f_thresh, test_array, np.NaN),
+ax[0,1].set_title("Highlighted regions: (t,b) volume where {0} > {1}".format(field_str, f_thresh))
+vol_im_thresh = ax[0,1].pcolormesh(X, Y, np.where(field[-1] > f_thresh, test_array, np.NaN),
     cmap=s_cmap, norm=s_norm)
-vol_im_threshc = ax[0,1].pcolormesh(X, Y, np.where(field[-1] > f_thresh, test_array, np.NaN),
+vol_im_threshc = ax[0,1].pcolormesh(X, Y, np.where(field[-1] <= f_thresh, test_array, np.NaN),
     cmap=s_cmap, norm=s_norm, alpha=0.2)
 vol_cont = ax[0,1].contour(Xf, Yf, field[-1], levels=[f_thresh], colors='g', alpha=0.5)
 
 ax[1,1].set_title("Highlighted regions: {0} where cumulative (t,b) volume negative".format(field_str))
 field_norm = plt.Normalize(0, f_thresh)
 field_im_thresh = ax[1,1].pcolormesh(X, Y, np.where(test_array < 0, field[-1], np.NaN),
-    cmap='hot', norm=field_norm)
+    cmap='hot_r', norm=field_norm)
 field_im_threshc = ax[1,1].pcolormesh(X, Y, np.where(test_array > 0, field[-1], np.NaN),
-    cmap='hot', norm=field_norm, alpha=0.2)
+    cmap='hot_r', norm=field_norm, alpha=0.2)
 field_cont = ax[1,1].contour(Xf, Yf, np.where(test_array < 0, test_array, 1),
         levels=[0], colors='b', alpha=0.5)
 
@@ -306,7 +278,7 @@ ax[1,0].bar(vols_plot, field_vols/vol_vols, width=vols[1:]-vols[:-1],
 ax[1,0].bar(vols_plot, field_volsc/vol_vols, width=vols[1:]-vols[:-1], bottom=field_vols/vol_vols,
         label="{0} <= {1}".format(field_str, f_thresh))
 
-ax[1,0].legend(loc=1)
+ax[1,0].legend()
 ax[1,0].set_ylim(0,1)
 
 #########################################################
@@ -334,8 +306,7 @@ plt.tight_layout()
 
 #############################################################################################################
 
-fig, ax = plt.subplots(1,2, figsize=(12, 3.5), constrained_layout=True)
-fig.set_constrained_layout_pads(wspace=0.05)
+fig, ax = plt.subplots(1,2, figsize=(12, 4))
 
 #########################################################
 
@@ -375,31 +346,31 @@ field_volsc[-1] = np.nansum(np.where(threshc_array >= vols[-2], cell_vols, np.Na
 vol_vols = field_vols + field_volsc
 
 ax[1].bar(vols_plot, field_vols/vol_vols, width=vols[1:]-vols[:-1],
-        label=r"$\mathrm{Ri} > \frac{1}{4}$")
+        label=r"$\chi > 10^{-7}$")
 ax[1].bar(vols_plot, field_volsc/vol_vols, width=vols[1:]-vols[:-1], bottom=field_vols/vol_vols,
-        label=r"$\mathrm{Ri} \leq \frac{1}{4}$")
+        label=r"$\chi \leq 10^{-7}$")
 
-ax[1].legend(loc=1)
+ax[1].legend()
 ax[1].set_ylim(0,1)
 ax[1].set_xlim(vols[0], vols[-1])
-ax[1].set_xlabel(r"$\Omega \, (m^3)$")
+ax[1].set_xlabel("$\Omega\,(m^3)$")
 ax[1].set_ylabel("Volume proportion")
 
-#ax[0].set_title("Richardson number $\mathrm{{Ri}}$")
+ax[0].set_title("Diapycnal flux $e$")
 field_norm = plt.Normalize(0, f_thresh)
-field_im_thresh = ax[0].pcolormesh(X, Y, np.where(test_array < 0, field[-1], np.NaN),
-    cmap='hot', norm=field_norm)
-field_im_threshc = ax[0].pcolormesh(X, Y, np.where(test_array > 0, field[-1], np.NaN),
-    cmap='hot', norm=field_norm, alpha=0.2)
-field_cont = ax[0].contour(Xf, Yf, np.where(test_array < 0, test_array, 1),
-        levels=[0], colors='b', alpha=0.5)
+ax[0].set_title("Plume cross-section coloured by segregated joint PDF")
+vol_im_thresh = ax[0].pcolormesh(X, Y, np.where(field[-1] > f_thresh, test_array, np.NaN),
+    cmap=s_cmap, norm=s_norm)
+vol_im_threshc = ax[0].pcolormesh(X, Y, np.where(field[-1] <= f_thresh, test_array, np.NaN),
+    cmap=s_cmap, norm=s_norm, alpha=0.2)
+vol_cont = ax[0].contour(Xf, Yf, field[-1], levels=[f_thresh], colors='g', alpha=0.5)
 
 div = make_axes_locatable(ax[0])
 cax = div.append_axes("right", size="5%", pad=0.05)
-plt.colorbar(field_im_thresh, cax=cax, label="Richardson number")
+plt.colorbar(vol_im_thresh, cax=cax, label="$\Omega \, (m^3)$")
 
 #bline = mlines.Line2D([], [], color='b', label="$\Omega < 0$")
-bline = mpatches.Patch(facecolor='white', edgecolor='b', label="$\Omega < 0$")
+bline = mpatches.Patch(facecolor='white', edgecolor='g', label="$\chi > 10^{{-7}}$")
 ax[0].legend(handles=[bline])
 
 ax[0].set_aspect(1)
@@ -407,6 +378,6 @@ ax[0].set_xlim(0.2, 0.4)
 ax[0].set_xlabel(r"$x\,(m)$")
 ax[0].set_ylabel(r"$z\,(m)$")
 
-#plt.tight_layout()
-plt.savefig('/home/cwp29/Documents/essay/figs/Ri_vol.png', dpi=300)
+plt.tight_layout()
+plt.savefig('/home/cwp29/Documents/essay/figs/chi_vol.png', dpi=300)
 plt.show()

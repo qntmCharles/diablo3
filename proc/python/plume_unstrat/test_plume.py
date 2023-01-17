@@ -1,5 +1,5 @@
-#import sys, os
-#sys.path.insert(1, os.path.join(sys.path[0],".."))
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0],".."))
 import h5py, bisect, time, gc, sys
 from os import listdir
 from os.path import isfile, join
@@ -9,7 +9,7 @@ import matplotlib.patheffects as pe
 import matplotlib
 from matplotlib import pyplot as plt
 from matplotlib.collections import LineCollection
-from functions import get_metadata, get_grid, read_params, get_az_data
+from functions import get_metadata, get_grid, read_params, get_az_data, compute_F0, get_index
 from scipy import integrate, optimize, interpolate
 from matplotlib import cm as cm
 from itertools import groupby
@@ -17,15 +17,17 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 ##### USER-DEFINED PARAMETERS #####
 params_file = "./params.dat"
-save_loc = "/home/cwp29/Documents/essay/figs/mvr/"
-save = True
+save_loc = "/home/cwp29/Documents/4report/figs/mvr/"
+save = False
 title = False
 show = not save
 
-z_upper = 70 # non-dim, scaled by r_0
-z_lower = 35
+z_upper = 0.9 * 0.2/0.002 # non-dim, scaled by r_0
+z_lower = 0.4 * 0.2/0.002
 
 width = 12
+
+tstart = 7.5
 
 eps = 0.02
 
@@ -77,19 +79,25 @@ print("Save directory: ", save_dir)
 md = get_metadata(run_dir, version)
 print("Complete metadata: ",md)
 
+tstart_idx = int(tstart // md['SAVE_STATS_DT'])
+
 ##### Get grid #####
 gxf, gyf, gzf, dz = get_grid(join(run_dir, 'grid.h5'), md)
 gzfp = np.flip(gzf)
 
 r_0 = md['r0']
+print(r_0)
+print(md['H']/r_0)
 dr = md['LX']/md['Nx']
 nbins = int(md['Nx']/2)
 r_bins = np.array([r*dr for r in range(0, nbins+1)])
 r_points = np.array([0.5*(r_bins[i]+r_bins[i+1]) for i in range(nbins)])
 
+print("##### F0 #####")
+print(compute_F0(save_dir, md, tstart_ind = tstart_idx, verbose=False))
+
 ##### Get azimuthal data #####
-############################ TODO: check this works okay with very large data files
-data = get_az_data(join(save_dir,'az_stats.h5'), md)
+data = get_az_data(join(save_dir,'az_stats.h5'), md, tstart_ind= tstart_idx)
 
 ubar = data['u']
 vbar = data['v']
@@ -137,7 +145,7 @@ for j in cont_valid_indices:
 plume_indices = list(set(list(sum(max([list(y) for i, y in groupby(zip(plume_indices,
     plume_indices[1:]), key = lambda x: (x[1]-x[0]) == 1)], key=len),()))))
 
-print(plume_indices)
+print([gzf[i] for i in plume_indices])
 
 ##### Truncate data at radius where wbar(r) = eps*wbar(0) #####
 
@@ -149,39 +157,45 @@ B_full = 2*integrate.trapezoid(bbar*r_points, r_points, axis=1)
 r_d = []
 wbar_trunc = np.zeros(shape=(wbar.shape[0],wbar.shape[1]+2))
 r_integrate = np.zeros(shape=(wbar.shape[0],wbar.shape[1]+2))
+to_remove = []
 for i in cont_valid_indices:
     wtrunc = eps*wbar[i,0]
     try:
         rtrunc = ranges(np.where(wbar[i,:] > wtrunc)[0])[0][-1]
+
+        wbar_trunc[i, :rtrunc+1] = wbar[i, :rtrunc+1]
+        wbar_trunc[i, rtrunc+1] = wtrunc
+
+        # Edge cases
+        if rtrunc == int(md['Nx']/2)-1:
+            wtrunc = wbar[i,-1]
+        if rtrunc == 0:
+            wtrunc = wbar[i, 0]
+
+        wbar_interp = wbar[i, rtrunc:rtrunc+2]
+        r_interp = r_points[rtrunc:rtrunc+2]
+
+        f = interpolate.interp1d(wbar_interp, r_interp)
+        r_d.append(f(wtrunc))
+        r_integrate[i, :rtrunc+1] = r_points[:rtrunc+1]
+        r_integrate[i, rtrunc+1] = f(wtrunc)
+        r_integrate[i, rtrunc+2] = f(wtrunc)
+
     except ValueError:
-        cont_valid_indices.remove(i)
+        print(rtrunc)
+        print(wbar_interp)
+        print(r_interp)
+
+        fig = plt.figure()
+        plt.plot(r_points, wbar[i])
+        plt.axhline(wtrunc)
+        plt.show()
+
+        to_remove.append(i)
         continue
 
-    wbar_trunc[i, :rtrunc+1] = wbar[i, :rtrunc+1]
-    wbar_trunc[i, rtrunc+1] = wtrunc
-
-    # Edge cases
-    if rtrunc == int(md['Nx']/2)-1:
-        wtrunc = wbar[i,-1]
-    if rtrunc == 0:
-        wtrunc = wbar[i, 0]
-
-    wbar_interp = wbar[i, rtrunc:rtrunc+2]
-    r_interp = r_points[rtrunc:rtrunc+2]
-
-    #print(wbar_interp)
-    #print(r_interp)
-
-    #fig = plt.figure()
-    #plt.plot(r_points, wbar[i])
-    #plt.axhline(wtrunc)
-    #plt.show()
-
-    f = interpolate.interp1d(wbar_interp, r_interp)
-    r_d.append(f(wtrunc))
-    r_integrate[i, :rtrunc+1] = r_points[:rtrunc+1]
-    r_integrate[i, rtrunc+1] = f(wtrunc)
-    r_integrate[i, rtrunc+2] = f(wtrunc)
+for i in to_remove:
+    cont_valid_indices.remove(i)
 
 bbar_trunc = truncate(bbar, r_points, wbar, eps*wbar[:,0], cont_valid_indices)
 pbar_trunc = truncate(pbar, r_points, wbar, eps*wbar[:,0], cont_valid_indices)
@@ -458,7 +472,7 @@ w_im = ax7[0].imshow(np.flip(wbar,axis=0),cmap='seismic',extent=[0, md['LX']/(r_
 w_im.set_clim(-1,1)
 ax7[0].plot([2*i/r_0 for i in r_d], factor*gzf[cont_valid_indices]/r_0, color='r',label="threshold radius")
 ax7[0].plot([2*analytic_r(gzf[i],0.105,z_virt)/r_0 for i in cont_valid_indices],
-        factor*gzf[cont_valid_indices]/r_0, color='k', linestyle='--', label="analytic radius (VR16)")
+        factor*gzf[cont_valid_indices]/r_0, color='k', linestyle='--', label="analytic radius (MvR)")
 ax7[0].plot(2*r_m[cont_valid_indices]/r_0, factor*gzf[cont_valid_indices]/r_0, color='blue',
         label="$r_m$")
 ax7[0].plot([2*analytic_r(gzf[i], alpha_p, z_virt)/r_0 for i in cont_valid_indices],
@@ -490,7 +504,7 @@ b_im.set_clim(-0.15,0.15)
 ax7[1].plot([2*i/r_0 for i in r_d], factor*gzf[cont_valid_indices]/r_0, color='r',label="threshold radius")
 ax7[1].set_title("b")
 ax7[1].plot([2*analytic_r(gzf[i],0.105,z_virt)/r_0 for i in cont_valid_indices],
-        factor*gzf[cont_valid_indices]/r_0, color='k', linestyle='--', label="analytic radius (VR16)")
+        factor*gzf[cont_valid_indices]/r_0, color='k', linestyle='--', label="analytic radius (MvR)")
 ax7[1].plot(2*r_m[cont_valid_indices]/r_0, factor*gzf[cont_valid_indices]/r_0, color='blue',
         label="$r_m$")
 ax7[1].plot([2*analytic_r(gzf[i], alpha_p, z_virt)/r_0 for i in cont_valid_indices],
@@ -537,8 +551,8 @@ plt.ylim(*yrange)
 plt.xlim(4,100)
 plt.xlabel("$(z - z_0)/r_0$")
 
-F_0 = md['Q0'] * np.pi * r_0**2
-#F_0 = md['b0'] * r_0**2
+F_0 = md['b0'] * r_0**2
+
 w_m_analytic = 5/6 * 1/alpha_p * np.power(9/10 * alpha_p * F_0/(theta_m_avg * beta_g_avg), 1/3) * \
         np.power(gzf, -1/3)
 b_m_analytic = 5/6 * F_0/(alpha_p*theta_m_avg) * np.power(9/10 * alpha_p * F_0/(theta_m_avg * \

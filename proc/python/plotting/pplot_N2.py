@@ -1,4 +1,5 @@
-# Script loads in 2D slices and produces a movie of the simulation output import numpy as np import h5py, gc
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0],".."))
 import h5py, cv2
 import numpy as np
 from matplotlib import pyplot as plt
@@ -67,7 +68,7 @@ fig, axs = plt.subplots(1,3,figsize=(15, 6))
 ims = np.array([None,None,None])
 cb = np.array([None,None,None])
 
-contour_isopycnals = np.linspace(0.1,np.max(th1_xz[0]), 30)
+contour_isopycnals = np.linspace(0,np.max(th1_xz[0]), 30)[1:]
 contour_plume = np.linspace(0.02, 0.1, 4)[:-1]
 
 print("Setting up initial plot...")
@@ -128,7 +129,7 @@ Writer = animation.writers['ffmpeg']
 writer = Writer(fps=20, bitrate=1800)
 
 print("Starting plot...")
-anim = animation.FuncAnimation(fig, animate, interval=250, frames=40)#NSAMP)
+anim = animation.FuncAnimation(fig, animate, interval=250, frames=NSAMP)
 
 now = datetime.now()
 #anim.save(save_dir+'fountain_w_%s.mp4'%now.strftime("%Y-%m-%d:%H"),writer=writer, dpi=300)
@@ -179,6 +180,6 @@ def animate2(step):
 
     return line1, line2, im,
 
-anim2 = animation.FuncAnimation(fig2, animate2, interval=250, frames=40)#NSAMP)
+anim2 = animation.FuncAnimation(fig2, animate2, interval=250, frames=NSAMP)
 
 plt.show()

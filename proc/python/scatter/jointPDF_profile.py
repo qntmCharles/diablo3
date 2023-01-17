@@ -8,7 +8,7 @@ import matplotlib
 import matplotlib.animation as animation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from datetime import datetime
-from functions import get_metadata, read_params, get_grid, g2gf_1d
+from functions import get_metadata, read_params, get_grid, g2gf_1d, get_az_data
 from scipy import ndimage, interpolate, spatial
 
 ##### USER DEFINED VARIABLES #####
@@ -44,6 +44,7 @@ with h5py.File(join(save_dir,"movie.h5"), 'r') as f:
     b = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
     t = g2gf_1d(md, t)
     b = g2gf_1d(md, b)
+
     scatter = np.array([np.array(f['td_scatter'][t]) for t in time_keys])
     scatter_flux = np.array([np.array(f['td_flux'][t]) for t in time_keys])
 
@@ -67,7 +68,8 @@ X, Y = np.meshgrid(gx, gz[idx_min:idx_max])
 Xf, Yf = np.meshgrid(gxf, gzf[idx_minf:idx_maxf])
 
 bref = b[0, :, int(md['Nx']/2)]
-t_orig = t
+t_orig = np.copy(t)
+b_orig = np.copy(b)
 b = b[start_idx:, idx_minf:idx_maxf, :]
 t = t[start_idx:, idx_minf:idx_maxf, :]
 scatter = scatter[start_idx:]
@@ -145,8 +147,20 @@ t_max = np.max(t[:,0,int(md['Nx']/2)])
 # Figure set-up
 
 while True:
-    fig,ax = plt.subplots(2, 2, figsize=(15,8))
-    fig.suptitle("time = 0.00 s")
+    #fig,ax = plt.subplots(2, 2, figsize=(15,8))
+    fig = plt.figure(constrained_layout = True, figsize=(15,6))
+    ax = fig.subplot_mosaic(
+        '''
+        STJ
+        ..B
+        ''',
+        gridspec_kw = {
+            "width_ratios": [1, 0.25, 1],
+            "height_ratios": [1, 0.3],
+        }
+    )
+
+    fig.suptitle("time = {0:.2f} s".format(times[-1]))
 
     sx, sy = np.meshgrid(bbins, tbins)
 
@@ -175,10 +189,37 @@ while True:
     contours_b = np.linspace(0, np.max(b), 10)
 
     #########################################################
+    # Compute tracer and buoyancy profiles
 
-    im_scatter = ax[0,1].pcolormesh(sx, sy, scatter[-1], cmap='jet')
-    im_flux = ax[1,0].pcolormesh(sx, sy, scatter_flux[-1], cmap=cmap, norm=norm)
-    im_corrected = ax[1,1].pcolormesh(sx, sy, scatter_corrected[-1], cmap=s_cmap, norm=s_norm)
+    p_idx = get_index(0.95*md['H'], gzf)
+
+    t_data = t_orig[start_idx:, p_idx, int(md['Nx']/2):]
+    tprof_mean = np.mean(t_data, axis=0)
+    tprof_max = t_data[np.argmax(np.max(t_data, axis=0))]
+
+    b_data = b_orig[start_idx:, p_idx, int(md['Nx']/2):]
+    bprof_mean = np.mean(b_data, axis=0)
+    bprof_max = b_data[np.argmax(np.max(b_data, axis=0))]
+
+    ax['B'].plot(bprof_mean, gxf[int(md['Nx']/2):]-md['LX']/2, color='k')
+    ax['B'].plot(bprof_max, gxf[int(md['Nx']/2):]-md['LX']/2, color='r', linestyle='--', alpha=0.5)
+
+    ax['T'].plot(gxf[int(md['Nx']/2):]-md['LX']/2, tprof_mean, color='k')
+    ax['T'].plot(gxf[int(md['Nx']/2):]-md['LX']/2, tprof_max, color='r', linestyle='--', alpha=0.5)
+
+    ax['B'].plot(b_orig[-1, p_idx, int(md['Nx']/2):], gxf[int(md['Nx']/2):]-md['LX']/2,
+            color='r')
+    ax['T'].plot(gxf[int(md['Nx']/2):]-md['LX']/2, t_orig[-1, p_idx, int(md['Nx']/2):],
+            color='r')
+
+    ax['B'].set_ylim(0,0.1)
+    ax['B'].set_xlim(bmin, bmax)
+    ax['T'].set_xlim(0,0.1)
+    ax['T'].set_ylim(tmin, tmax)
+
+    #########################################################
+
+    im_corrected = ax['J'].pcolormesh(sx, sy, scatter_corrected[-1], cmap=s_cmap, norm=s_norm)
 
     test_array = np.zeros_like(t[-1])
     for i in range(int(md['Nb'])):
@@ -187,11 +228,11 @@ while True:
                 b[-1] <= bbins[i] + db/2),np.logical_and(t[-1] > tbins[j] - dt/2,
                 t[-1] <= tbins[j] + dt/2))] = scatter_corrected[-1,j,i]
 
-    trac_im = ax[0,0].pcolormesh(X, Y, test_array, cmap=s_cmap, norm=s_norm)
-    b_cont = ax[0,0].contour(Xf, Yf, np.where(t[-1] <= 5e-4, b[-1], np.NaN),
+    trac_im = ax['S'].pcolormesh(X, Y, test_array, cmap=s_cmap, norm=s_norm)
+    b_cont = ax['S'].contour(Xf, Yf, np.where(t[-1] <= 5e-4, b[-1], np.NaN),
                 levels = contours_b, cmap='cool', alpha=0.8)
-    b_cont_fill = ax[0,0].contourf(b_cont, levels = contours_b, cmap='cool', alpha=0.8)
-    t_cont = ax[0,0].contour(Xf, Yf, t[-1], levels = [5e-4], colors='green', alpha=0.8)
+    b_cont_fill = ax['S'].contourf(b_cont, levels = contours_b, cmap='cool', alpha=0.8, extend='min')
+    t_cont = ax['S'].contour(Xf, Yf, t[-1], levels = [5e-4], colors='green', alpha=0.8)
 
     #########################################################
 
@@ -202,9 +243,9 @@ while True:
     if len(points) > 0:
         hull = spatial.ConvexHull(points)
 
-        ax[1,1].plot(points[hull.simplices[0],0], points[hull.simplices[0],1], 'r--', label="convex hull")
+        ax['J'].plot(points[hull.simplices[0],0], points[hull.simplices[0],1], 'r--', label="convex hull")
         for simplex in hull.simplices:
-            ax[1,1].plot(points[simplex,0], points[simplex,1], 'r--')
+            ax['J'].plot(points[simplex,0], points[simplex,1], 'r--')
 
     #########################################################
 
@@ -215,84 +256,44 @@ while True:
     t_com = np.nansum(tgrid * np.where(scatter_corrected[-1] > 0, scatter_corrected[-1], 0)) \
             / np.nansum(np.where(scatter_corrected[-1]>0, scatter_corrected[-1],0))
 
-    ax[0,1].scatter(b_com, t_com, color='red', edgecolor='white', marker='^', s=200)
-    ax[1,0].scatter(b_com, t_com, color='red', edgecolor='white', marker='^', s=200)
-    ax[1,1].scatter(b_com, t_com, color='red', edgecolor='white', marker='^', s=200)
+    ax['J'].scatter(b_com, t_com, color='red', edgecolor='white', marker='^', s=200)
 
     b_com = np.nansum(bgrid * np.where(scatter_corrected[-1] < 0, scatter_corrected[-1], 0)) \
             / np.nansum(np.where(scatter_corrected[-1]<0, scatter_corrected[-1],0))
     t_com = np.nansum(tgrid * np.where(scatter_corrected[-1] < 0, scatter_corrected[-1], 0)) \
             / np.nansum(np.where(scatter_corrected[-1]<0, scatter_corrected[-1],0))
 
-    ax[0,1].scatter(b_com, t_com, color='blue', edgecolor='white', marker='^', s=200)
-    ax[1,0].scatter(b_com, t_com, color='blue', edgecolor='white', marker='^', s=200)
-    ax[1,1].scatter(b_com, t_com, color='blue', edgecolor='white', marker='^', s=200)
+    ax['J'].scatter(b_com, t_com, color='blue', edgecolor='white', marker='^', s=200)
 
     #########################################################
 
     # Decorations
-    im_div = make_axes_locatable(ax[0,0])
-    im_cax = im_div.append_axes("right", size="5%", pad=0.05)
-    im_cb = plt.colorbar(trac_im, cax=im_cax, label="volume $(m^3)$")
-
-    im_scatter.set_clim(0, np.nanmax(scatter[-1]))
-
-    cont_norm = matplotlib.colors.Normalize(vmin=b_cont.cvalues.min(), vmax=b_cont.cvalues.max())
-    cont_sm = plt.cm.ScalarMappable(norm=cont_norm, cmap=b_cont.cmap)
-    im_cont_cax = im_div.append_axes("right", size="5%", pad=0.65)
-    im_cont_cb = plt.colorbar(b_cont_fill, cax=im_cont_cax, format=lambda x,_ :f"{x:.3f}", label="buoyancy")
+    im_cont_cb = plt.colorbar(b_cont_fill, ax=ax['S'], format=lambda x,_ :f"{x:.3f}", label="buoyancy")
     im_cont_cb.set_alpha(1)
     im_cont_cb.draw_all()
 
-    sc_div = make_axes_locatable(ax[0,1])
-    sc_cax = sc_div.append_axes("right", size="5%", pad=0.05)
-    sc_cb = plt.colorbar(im_scatter, cax=sc_cax, label="volume")
+    corr_cb = plt.colorbar(im_corrected, ax=ax['J'], label="volume")
 
-    flux_div = make_axes_locatable(ax[1,0])
-    flux_cax = flux_div.append_axes("right", size="5%", pad=0.05)
-    flux_cb = plt.colorbar(im_flux, cax=flux_cax, label="volume")
+    ax['S'].set_title("Plume cross-section")
+    ax['J'].set_title("Accumulated $(b,\\phi)$ distribution input to stratified region")
 
-    corr_div = make_axes_locatable(ax[1,1])
-    corr_cax = corr_div.append_axes("right", size="5%", pad=0.05)
-    corr_cb = plt.colorbar(im_corrected, cax=corr_cax, label="volume")
+    ax['J'].set_xlabel("buoyancy")
+    ax['J'].set_ylabel("tracer")
+    ax['J'].set_xlim(bmin, bmax)
+    ax['J'].set_ylim(tmin, tmax)
 
-    ax[0,0].set_title("Plume cross-section")
-    ax[0,1].set_title("Stratified region $(b,\\phi)$ distribution")
-    ax[1,0].set_title("Accumulated $(b,\\phi)$ distribution input to stratified region")
-    ax[1,1].set_title("Total - accumulated input $(b,\\phi)$ distribution")
+    ax['J'].axvline(b_zmax, color='k', linestyle='--')
+    ax['J'].axhline(t_rms, color='k', linestyle='--')
+    ax['J'].legend()
 
-    ax[0,1].set_xlabel("buoyancy")
-    ax[0,1].set_ylabel("tracer")
-    ax[0,1].set_xlim(bmin, bmax)
-    ax[0,1].set_ylim(tmin, tmax)
-    ax[1,0].set_xlabel("buoyancy")
-    ax[1,0].set_ylabel("tracer")
-    ax[1,0].set_xlim(bmin, bmax)
-    ax[1,0].set_ylim(tmin, tmax)
-    ax[1,1].set_xlabel("buoyancy")
-    ax[1,1].set_ylabel("tracer")
-    ax[1,1].set_xlim(bmin, bmax)
-    ax[1,1].set_ylim(tmin, tmax)
+    ax['S'].set_xlim(0.2, 0.4)
 
-    ax[0,1].axvline(b_zmax, color='k', linestyle='--')
-    ax[1,0].axvline(b_zmax, color='k', linestyle='--')
-    ax[1,1].axvline(b_zmax, color='k', linestyle='--')
-
-    ax[0,1].axhline(t_rms, color='k', linestyle='--')
-    ax[1,0].axhline(t_rms, color='k', linestyle='--')
-    ax[1,1].axhline(t_rms, color='k', linestyle='--')
-
-    ax[1,1].legend()
-
-    ax[0,0].set_xlim(0.2, 0.4)
-
-    plt.tight_layout()
     #plt.savefig(save_dir+'scatter.png',dpi=300)
-    #plt.show()
     #########################################################
 
     def animate(step):
-        #global b_cont, t_cont, b_cont_fill
+        global corr_cb
+
         s_cvals = np.concatenate((np.array([-0.5*np.nanmax(scatter_corrected[step])]),
             np.linspace(0,np.nanmax(scatter_corrected[step]),31)[:]))
         s_colors = np.concatenate((np.array([[0.,0.,1.,1.,]]),
@@ -309,50 +310,51 @@ while True:
         tuples = list(zip(map(norm,cvals), colors))
         cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", tuples)
 
-        ax[0,0].clear()
-        ax[0,1].clear()
-        ax[1,0].clear()
-        ax[1,1].clear()
+        ax['S'].clear()
+        ax['J'].clear()
 
-        ax[0,0].set_title("Plume cross-section")
-        ax[0,1].set_title("Stratified region $(b,\\phi)$ distribution")
-        ax[1,0].set_title("Accumulated $(b,\\phi)$ distribution input to stratified region")
-        ax[1,1].set_title("Total - accumulated input $(b,\\phi)$ distribution")
+        ax['S'].set_title("Plume cross-section")
+        ax['J'].set_title("Accumulated $(b,\\phi)$ distribution input to stratified region")
 
-        ax[0,1].axvline(b_zmax, color='k', linestyle='--')
-        ax[1,0].axvline(b_zmax, color='k', linestyle='--')
-        ax[1,1].axvline(b_zmax, color='k', linestyle='--')
+        ax['J'].axvline(b_zmax, color='k', linestyle='--')
+        ax['J'].axhline(t_rms, color='k', linestyle='--')
 
-        ax[0,1].axhline(t_rms, color='k', linestyle='--')
-        ax[1,0].axhline(t_rms, color='k', linestyle='--')
-        ax[1,1].axhline(t_rms, color='k', linestyle='--')
+        ax['B'].clear()
+        ax['T'].clear()
+        ax['B'].plot(bprof_mean, gxf[int(md['Nx']/2):]-md['LX']/2, color='k')
+        ax['B'].plot(bprof_max, gxf[int(md['Nx']/2):]-md['LX']/2, color='r', linestyle='--', alpha=0.5)
 
-        im_scatter = ax[0,1].pcolormesh(sx, sy, scatter[step], cmap='jet')
-        im_scatter.set_clim(0, np.nanmax(scatter[step]))
-        im_flux = ax[1,0].pcolormesh(sx, sy, scatter_flux[step], cmap=cmap, norm=norm)
-        im_corrected = ax[1,1].pcolormesh(sx, sy, scatter_corrected[step], cmap=s_cmap, norm=s_norm)
+        ax['T'].plot(gxf[int(md['Nx']/2):]-md['LX']/2, tprof_mean, color='k')
+        ax['T'].plot(gxf[int(md['Nx']/2):]-md['LX']/2, tprof_max, color='r', linestyle='--', alpha=0.5)
 
-        sc_cb = plt.colorbar(im_scatter, cax=sc_cax, label="volume")
-        flux_cb = plt.colorbar(im_flux, cax=flux_cax, label="volume")
-        corr_cb = plt.colorbar(im_corrected, cax=corr_cax, label="volume")
+        ax['B'].plot(b_orig[start_idx+step, p_idx, int(md['Nx']/2):], gxf[int(md['Nx']/2):]-md['LX']/2,
+                color='r')
+        ax['T'].plot(gxf[int(md['Nx']/2):]-md['LX']/2, t_orig[start_idx+step, p_idx, int(md['Nx']/2):],
+                color='r')
+
+        ax['B'].set_ylim(0,0.1)
+        ax['B'].set_xlim(bmin, bmax)
+        ax['T'].set_xlim(0,0.1)
+        ax['T'].set_ylim(tmin, tmax)
+
+        im_corrected = ax['J'].pcolormesh(sx, sy, scatter_corrected[step], cmap=s_cmap, norm=s_norm)
+
+        corr_cb.remove()
+        corr_cb = plt.colorbar(im_corrected, ax=ax['J'], label="volume")
 
         b_com = np.nansum(bgrid * np.where(scatter_corrected[step] > 0, scatter_corrected[step], 0)) \
                 / np.nansum(np.where(scatter_corrected[step]>0, scatter_corrected[step],0))
         t_com = np.nansum(tgrid * np.where(scatter_corrected[step] > 0, scatter_corrected[step], 0)) \
                 / np.nansum(np.where(scatter_corrected[step]>0, scatter_corrected[step],0))
 
-        ax[0,1].scatter(b_com, t_com, color='red', edgecolor='white', marker='^', s=200)
-        ax[1,0].scatter(b_com, t_com, color='red', edgecolor='white', marker='^', s=200)
-        ax[1,1].scatter(b_com, t_com, color='red', edgecolor='white', marker='^', s=200)
+        ax['J'].scatter(b_com, t_com, color='red', edgecolor='white', marker='^', s=200)
 
         b_com = np.nansum(bgrid * np.where(scatter_corrected[step] < 0, scatter_corrected[step], 0)) \
                 / np.nansum(np.where(scatter_corrected[step]<0, scatter_corrected[step],0))
         t_com = np.nansum(tgrid * np.where(scatter_corrected[step] < 0, scatter_corrected[step], 0)) \
                 / np.nansum(np.where(scatter_corrected[step]<0, scatter_corrected[step],0))
 
-        ax[0,1].scatter(b_com, t_com, color='blue', edgecolor='white', marker='^', s=200)
-        ax[1,0].scatter(b_com, t_com, color='blue', edgecolor='white', marker='^', s=200)
-        ax[1,1].scatter(b_com, t_com, color='blue', edgecolor='white', marker='^', s=200)
+        ax['J'].scatter(b_com, t_com, color='blue', edgecolor='white', marker='^', s=200)
 
         sx_nan = sx[~np.isnan(scatter_corrected[step])].flatten()
         sy_nan = sy[~np.isnan(scatter_corrected[step])].flatten()
@@ -361,9 +363,9 @@ while True:
         if len(points) > 0:
             hull = spatial.ConvexHull(points)
 
-            ax[1,1].plot(points[hull.simplices[0],0], points[hull.simplices[0],1], 'r--', label="convex hull")
+            ax['J'].plot(points[hull.simplices[0],0], points[hull.simplices[0],1], 'r--', label="convex hull")
             for simplex in hull.simplices:
-                ax[1,1].plot(points[simplex,0], points[simplex,1], 'r--')
+                ax['J'].plot(points[simplex,0], points[simplex,1], 'r--')
 
         fig.suptitle("time = {0:.2f} s".format(times[step]))
 
@@ -374,38 +376,28 @@ while True:
                     b[step] <= bbins[i] + db/2),np.logical_and(t[step] > tbins[j] - dt/2,
                     t[step] <= tbins[j] + dt/2))] = scatter_corrected[step,j,i]
 
-        trac_im = ax[0,0].pcolormesh(X, Y, test_array, cmap=s_cmap, norm=s_norm)
-        im_cb = plt.colorbar(trac_im, cax=im_cax, label="volume $(m^3)$")
+        trac_im = ax['S'].pcolormesh(X, Y, test_array, cmap=s_cmap, norm=s_norm)
 
-        b_cont = ax[0,0].contour(Xf, Yf, np.where(t[step] <= 5e-4, b[step], np.NaN),
+        b_cont = ax['S'].contour(Xf, Yf, np.where(t[step] <= 5e-4, b[step], np.NaN),
                 levels = contours_b, cmap='cool', alpha=0.8)
-        b_cont_fill = ax[0,0].contourf(b_cont, levels = contours_b, cmap='cool', alpha=0.8, extend='min')
-        t_cont = ax[0,0].contour(Xf, Yf, t[step], levels = [5e-4], colors='green', alpha=0.8)
+        b_cont_fill = ax['S'].contourf(b_cont, levels = contours_b, cmap='cool', alpha=0.8, extend='min')
+        t_cont = ax['S'].contour(Xf, Yf, t[step], levels = [5e-4], colors='green', alpha=0.8)
 
-        ax[0,0].set_xlim(0.2, 0.4)
+        ax['S'].set_xlim(0.2, 0.4)
 
-        ax[0,1].set_xlabel("buoyancy")
-        ax[0,1].set_ylabel("tracer")
-        ax[0,1].set_xlim(bmin, bmax)
-        ax[0,1].set_ylim(tmin, tmax)
-        ax[1,0].set_xlabel("buoyancy")
-        ax[1,0].set_ylabel("tracer")
-        ax[1,0].set_xlim(bmin, bmax)
-        ax[1,0].set_ylim(tmin, tmax)
-        ax[1,1].set_xlabel("buoyancy")
-        ax[1,1].set_ylabel("tracer")
-        ax[1,1].set_xlim(bmin, bmax)
-        ax[1,1].set_ylim(tmin, tmax)
+        ax['J'].set_xlabel("buoyancy")
+        ax['J'].set_ylabel("tracer")
+        ax['J'].set_xlim(bmin, bmax)
+        ax['J'].set_ylim(tmin, tmax)
 
-        ax[1,1].legend()
+        ax['J'].legend()
 
-        return im_scatter, im_flux, im_corrected, trac_im
+        return im_corrected, trac_im
 
     Writer = animation.writers['ffmpeg']
     writer = Writer(fps=4, bitrate=-1)
 
     anim = animation.FuncAnimation(fig, animate, interval=250, frames=NSAMP, repeat=False)
     now = datetime.now()
-    plt.tight_layout()
     #anim.save(save_dir+'scatter_%s.mp4'%now.strftime("%d-%m-%Y"),writer=writer)
     plt.show()

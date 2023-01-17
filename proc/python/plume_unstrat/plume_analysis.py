@@ -13,7 +13,7 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 ##### USER-DEFINED PARAMETERS #####
 params_file = "./params.dat"
-#save_loc = "/home/cwp29/Documents/plume_project/figs/mvr/"
+save_loc = "/home/cwp29/Documents/plume_project/figs/mvr/"
 save = False
 title = True
 show = True

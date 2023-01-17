@@ -1,3 +1,5 @@
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0],".."))
 import h5py, gc, sys
 import numpy as np
 from scipy.interpolate import griddata
@@ -125,7 +127,7 @@ bbins_plot = 0.5*(bbins[1:] + bbins[:-1])
 
 ##### Compute 'source' PDF #####
 
-source_dist_fig = plt.figure(figsize=(8, 5))
+source_dist_fig = plt.figure(figsize=(12, 4), constrained_layout = True)
 
 # First get data we want to process
 top = 1.000*md['H']
@@ -176,15 +178,15 @@ cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", ["red", "blue"])
 tcols = cmap(np.linspace(0,1,nplot))
 
 #fig, ax1 = plt.subplots(facecolor=(0.9,0.9,0.9))
-fig, ax1 = plt.subplots(figsize=(8,5))
+fig, ax1 = plt.subplots(figsize=(10,4))
 
 ax2 = ax1.inset_axes([32, 0.08, 28, 0.06], transform=ax1.transData)
 ax2.plot(times, tracer_total,color='b')
 #ax2.set_facecolor((0.9,0.9,0.9))
-ax2.set_xlim(0, times[-1])
-ax2.set_ylim(0, tracer_total[-1])
-ax2.set_ylabel("total tracer (arbitrary units)")
-ax2.set_xlabel("time")
+ax2.set_xlim(0, 20)#times[-1])
+ax2.set_ylim(0, 70)#tracer_total[-1])
+ax2.set_ylabel("total tracer conc.")
+ax2.set_xlabel("time (s)")
 
 #ax1.set_facecolor((0.9, 0.9, 0.9))
 
@@ -195,7 +197,7 @@ b_nd = np.power(N, 5/4) * np.power(F0, 1/4)
 
 ax1.plot(source_dist, bbins_plot, color='k', linestyle='--', label="pre-penetration")
 
-for step,c in zip(t_inds, tcols):
+for step,c in zip(t_inds[:-1], tcols[:-1]):
     b_pdfs = []
     for d in range(len(dirs)):
         b_pdf = compute_pdf(b[d,step,plot_min:plot_max], t[d,step,plot_min:plot_max], bbins,
@@ -203,16 +205,20 @@ for step,c in zip(t_inds, tcols):
         b_pdfs.append(b_pdf)
         #plt.plot(b_pdf, bbins_plot/b_nd, color=c, alpha=0.5, linestyle='--')
 
-    ax1.plot(np.mean(b_pdfs,axis=0), bbins_plot, color=c, label = "t={0:.2f}".format(times[step]))
+    if step == t_inds[0]:
+        ax1.plot(np.mean(b_pdfs,axis=0), bbins_plot, color=c, label = "t={0:.2f} s (at penetration)".format(
+            times[step]))
+    else:
+        ax1.plot(np.mean(b_pdfs,axis=0), bbins_plot, color=c, label = "t={0:.2f} s".format(times[step]))
 
-ax1.set_ylabel("buoyancy")
-ax1.set_xlabel("tracer (arbitrary units, normalised)")
+ax1.set_ylabel(r"buoyancy ($m\,s^{-2}$)")
+ax1.set_xlabel("tracer concentration (arbitrary units, normalised)")
 ax1.set_ylim(0, 0.15)
 ax1.set_xlim(0, 62)
 #ax1.legend(loc='upper left', facecolor=(0.9,0.9,0.9), bbox_to_anchor=(0.1, 0.98))
 ax1.legend(loc='upper left', bbox_to_anchor=(0.05, 0.98))
 
-plt.tight_layout()
+#plt.tight_layout()
 #plt.savefig('/home/cwp29/Documents/posters/issf2/tb_dist_gray.png', dpi=200)
-plt.savefig('/home/cwp29/Documents/4report/figs/tb_dist.png', dpi=200)
+plt.savefig('/home/cwp29/Documents/essay/figs/tb_dist.png', dpi=200)
 plt.show()

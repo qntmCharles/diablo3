@@ -1,3 +1,5 @@
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0],".."))
 import h5py
 import numpy as np
 from os.path import join
@@ -103,10 +105,10 @@ Ri = 2*np.where(np.logical_and(z_coords < md['H'], b<1e-3), np.inf, N2)/(np.powe
 e = kappa * diapycvel/md['N2']
 B = bfluc * wfluc
 eps *= (md['nu'] + nu_t)/md['nu']
-#Re_b = eps/((md['nu'] + nu_t)*np.abs(np.where(np.logical_and(z_coords < md['H'], b<1e-3), 1e5, N2)))
+Re_b = eps/((md['nu'] + nu_t)*np.abs(np.where(np.logical_and(z_coords < md['H'], b<1e-3), 1e5, N2)))
 #Re_b = eps/((md['nu'])*np.abs(np.where(np.logical_and(z_coords < md['H'], b<1e-3), 1e5, md['N2'])))
-Re_b = eps/(md['nu']*md['N2'])
-#Re_b = eps/((md['nu'] + nu_t)*np.abs(N2))
+#Re_b = eps/(md['nu']*md['N2'])
+#Re_b = eps/((md['nu'] + nu_t)*md['N2'])
 Re_b = np.log(Re_b)
 
 # Restrict to penetration region
@@ -122,12 +124,12 @@ B = B[:, idx_min:idx_max, :]
 trac = trac[:, idx_min:idx_max, :]
 
 
+#for i in range(NSAMP):
+    #eps[i] = ndimage.gaussian_filter(eps[i], 0.2)
+    #e[i] = ndimage.gaussian_filter(e[i], 0.2)
+
 # Adjustment for sgs effects
 eps = np.log(eps)
-
-for i in range(NSAMP):
-    eps[i] = ndimage.gaussian_filter(eps[i], 0.7)
-    e[i] = ndimage.gaussian_filter(e[i], 0.7)
 
 print("Total time steps: %s"%NSAMP)
 print("Dimensional times: ",times)
@@ -138,140 +140,97 @@ contour_lvls_t = [1e-3]
 
 """ ----------------------------------------------------------------------------------------------------- """
 
-step = 36
+step = 48
 
 """ ----------------------------------------------------------------------------------------------------- """
 
-fig, ax = plt.subplots(3,2, figsize=(16, 8))
-fig.suptitle("time = {0:.2f} s".format(times[step]))
+fig, ax = plt.subplots(2,3, figsize=(16.5, 8), constrained_layout=True)
+#fig.suptitle("time = {0:.2f} s".format(times[step]))
 
-ax[0,0].set_aspect(1)
-ax[1,0].set_aspect(1)
-ax[2,0].set_aspect(1)
-ax[0,1].set_aspect(1)
-ax[1,1].set_aspect(1)
-ax[2,1].set_aspect(1)
-
-ax[0,0].set_xlabel("$x$")
-ax[0,0].set_ylabel("$z$")
-ax[0,0].set_ylim(gz[idx_min], gz[idx_max])
-ax[0,0].axhline(md['Lyc']+md['Lyp'],color='grey', linestyle=':')
-
-ax[1,0].set_xlabel("$x$")
-ax[1,0].set_ylabel("$z$")
-ax[1,0].set_ylim(gz[idx_min], gz[idx_max])
-ax[1,0].axhline(md['Lyc']+md['Lyp'],color='grey', linestyle=':')
-
-ax[2,0].set_xlabel("$x$")
-ax[2,0].set_ylabel("$z$")
-ax[2,0].set_ylim(gz[idx_min], gz[idx_max])
-ax[2,0].axhline(md['Lyc']+md['Lyp'],color='grey', linestyle=':')
-
-ax[0,1].set_xlabel("$x$")
-ax[0,1].set_ylabel("$z$")
-ax[0,1].set_ylim(gz[idx_min], gz[idx_max])
-ax[0,1].axhline(md['Lyc']+md['Lyp'],color='grey', linestyle=':')
-
-ax[1,1].set_xlabel("$x$")
-ax[1,1].set_ylabel("$z$")
-ax[1,1].set_ylim(gz[idx_min], gz[idx_max])
-ax[1,1].axhline(md['Lyc']+md['Lyp'],color='grey', linestyle=':')
-
-ax[2,1].set_xlabel("$x$")
-ax[2,1].set_ylabel("$z$")
-ax[2,1].set_ylim(gz[idx_min], gz[idx_max])
-ax[2,1].axhline(md['Lyc']+md['Lyp'],color='grey', linestyle=':')
+for single_ax in ax.ravel():
+    single_ax.set_aspect(1)
+    single_ax.set_xlabel("$x\, (m)$")
+    single_ax.set_ylabel("$z\, (m)$")
+    single_ax.set_ylim(gz[idx_min], gz[idx_max])
+    single_ax.axhline(md['Lyc']+md['Lyp'],color='grey', linestyle=':')
+    single_ax.set_xlim(0.2, 0.4)
 
 """ ----------------------------------------------------------------------------------------------------- """
 
-e_im = ax[0,0].pcolormesh(X, Y, e[step], cmap='bwr')
-e_contour_b = ax[0,0].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='grey', alpha=0.5)
-e_contour_t = ax[0,0].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
+eps_im = ax[0,0].pcolormesh(X, Y, eps[step], cmap='hot_r')
+eps_contour_b = ax[0,0].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='darkturquoise', alpha=0.7)
+eps_contour_t = ax[0,0].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
 
-e_divider = make_axes_locatable(ax[0,0])
-e_cax = e_divider.append_axes("right", size="5%", pad=0.05)
-e_cb = plt.colorbar(e_im, cax=e_cax)
-e_max = 0.2*np.max(np.abs(e[step]))
-e_im.set_clim(-e_max, e_max)
-
-ax[0,0].set_title("Diapycnal flux $e$")
-
-B_im = ax[1,0].pcolormesh(X, Y, B[step], cmap='bwr')
-B_contour_b = ax[1,0].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='grey', alpha=0.5)
-B_contour_t = ax[1,0].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
-
-B_divider = make_axes_locatable(ax[1,0])
-B_cax = B_divider.append_axes("right", size="5%", pad=0.05)
-B_cb = plt.colorbar(B_im, cax=B_cax)
-B_max = 0.6*np.max(np.abs(B[step]))
-B_im.set_clim(-B_max, B_max)
-
-ax[1,0].set_title("Vertical turbulent density flux $B$")
-
-eps_im = ax[2,0].pcolormesh(X, Y, eps[step], cmap='hot_r')
-eps_contour_b = ax[2,0].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='darkturquoise', alpha=0.7)
-eps_contour_t = ax[2,0].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
-
-eps_divider = make_axes_locatable(ax[2,0])
+eps_divider = make_axes_locatable(ax[0,0])
 eps_cax = eps_divider.append_axes("right", size="5%", pad=0.05)
 eps_cb = plt.colorbar(eps_im, cax=eps_cax)
-eps_im.set_clim(-20, -5)
+eps_im.set_clim(-12, -6)
 
-ax[2,0].set_title("TKE dissipation rate $\\varepsilon$ (log scale)")
+ax[0,0].set_title("(a) TKE dissipation rate $\\varepsilon$ (log scale)")
 
-chi_im = ax[0,1].pcolormesh(X, Y, chi[step], cmap='hot_r')
-chi_contour_b = ax[0,1].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='darkturquoise', alpha=0.5)
-chi_contour_t = ax[0,1].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
+Ri_im = ax[0,1].pcolormesh(X, Y, Ri[step], cmap='hot')
+Ri_contour_b = ax[0,1].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='darkturquoise', alpha=0.7)
+Ri_contour_t = ax[0,1].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
 
-chi_divider = make_axes_locatable(ax[0,1])
+Ri_divider = make_axes_locatable(ax[0,1])
+Ri_cax = Ri_divider.append_axes("right", size="5%", pad=0.05)
+Ri_cb = plt.colorbar(Ri_im, cax=Ri_cax)
+Ri_im.set_clim(0, 0.25)
+
+ax[0,1].set_title("(b) Richardson number $Ri$")
+
+Re_b_im = ax[0,2].pcolormesh(X, Y, Re_b[step], cmap='hot_r')
+Re_b_contour_b = ax[0,2].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='darkturquoise', alpha=0.7)
+Re_b_contour_t = ax[0,2].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
+
+Re_b_divider = make_axes_locatable(ax[0,2])
+Re_b_cax = Re_b_divider.append_axes("right", size="5%", pad=0.05)
+Re_b_cb = plt.colorbar(Re_b_im, cax=Re_b_cax)
+#Re_b_max = 0.9*np.max(Re_b[-1])
+Re_b_im.set_clim(0, 8)
+
+ax[0,2].set_title("(c) Buoyancy Reynolds number $\\mathrm{{Re}}_b$ (log scale)")
+
+chi_im = ax[1,0].pcolormesh(X, Y, chi[step], cmap='hot_r')
+chi_contour_b = ax[1,0].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='darkturquoise', alpha=0.5)
+chi_contour_t = ax[1,0].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
+
+chi_divider = make_axes_locatable(ax[1,0])
 chi_cax = chi_divider.append_axes("right", size="5%", pad=0.05)
 chi_cb = plt.colorbar(chi_im, cax=chi_cax)
 chi_max = 0.2*np.max(chi[-1])
 chi_im.set_clim(0, chi_max)
 
-ax[0,1].set_title("Thermal variance dissipation rate $\\chi$")
+ax[1,0].set_title("(d) Thermal variance dissipation rate $\\chi$")
 
-Ri_im = ax[1,1].pcolormesh(X, Y, Ri[step], cmap='hot')
-Ri_contour_b = ax[1,1].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='darkturquoise', alpha=0.7)
-Ri_contour_t = ax[1,1].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
+e_im = ax[1,1].pcolormesh(X, Y, e[step], cmap='bwr')
+e_contour_b = ax[1,1].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='grey', alpha=0.5)
+e_contour_t = ax[1,1].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
 
-Ri_divider = make_axes_locatable(ax[1,1])
-Ri_cax = Ri_divider.append_axes("right", size="5%", pad=0.05)
-Ri_cb = plt.colorbar(Ri_im, cax=Ri_cax)
-Ri_im.set_clim(0, 0.25)
+e_divider = make_axes_locatable(ax[1,1])
+e_cax = e_divider.append_axes("right", size="5%", pad=0.05)
+e_cb = plt.colorbar(e_im, cax=e_cax)
+e_max = 0.2*np.max(np.abs(e[step]))
+e_im.set_clim(-e_max, e_max)
 
-ax[1,1].set_title("Richardson number $Ri$")
+ax[1,1].set_title("(e) Diapycnal flux $e$")
 
-"""
-trac_im = ax[2,1].pcolormesh(X, Y, trac[step], cmap='jet')
-trac_contour_b = ax[2,1].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='grey', alpha=0.5)
-trac_contour_t = ax[2,1].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='red', linestyles='--')
+B_im = ax[1,2].pcolormesh(X, Y, B[step], cmap='bwr')
+B_contour_b = ax[1,2].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='grey', alpha=0.5)
+B_contour_t = ax[1,2].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
 
-trac_divider = make_axes_locatable(ax[2,1])
-trac_cax = trac_divider.append_axes("right", size="5%", pad=0.05)
-trac_cb = plt.colorbar(trac_im, cax=trac_cax)
-trac_im.set_clim(0, 0.04)
+B_divider = make_axes_locatable(ax[1,2])
+B_cax = B_divider.append_axes("right", size="5%", pad=0.05)
+B_cb = plt.colorbar(B_im, cax=B_cax)
+B_max = 0.6*np.max(np.abs(B[step]))
+B_im.set_clim(-B_max, B_max)
 
-ax[2,1].set_title("Tracer")
-"""
-
-Re_b_im = ax[2,1].pcolormesh(X, Y, Re_b[step], cmap='hot_r')
-Re_b_contour_b = ax[2,1].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='darkturquoise', alpha=0.7)
-Re_b_contour_t = ax[2,1].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
-
-Re_b_divider = make_axes_locatable(ax[2,1])
-Re_b_cax = Re_b_divider.append_axes("right", size="5%", pad=0.05)
-Re_b_cb = plt.colorbar(Re_b_im, cax=Re_b_cax)
-Re_b_max = 0.9*np.max(Re_b[-1])
-Re_b_im.set_clim(0, Re_b_max)
-
-ax[2,1].set_title("Buoyancy Reynolds number $\\mathrm{{Re}}_b$ (log scale)")
-
+ax[1,2].set_title("(f) Vertical turbulent density flux $B$")
 
 """ ----------------------------------------------------------------------------------------------------- """
 now = datetime.now()
 
-plt.tight_layout()
+#plt.tight_layout()
 #plt.savefig(join(save_dir, 'mixing_t%s_%s.pdf'%(step,now.strftime("%d-%m-%Y-%H"))), dpi=300)
-plt.savefig('/home/cwp29/Documents/4report/figs/mixing.png', dpi=200)
+plt.savefig('/home/cwp29/Documents/essay/figs/mixing.png', dpi=200)
 plt.show()

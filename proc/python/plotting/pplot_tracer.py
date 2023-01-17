@@ -9,7 +9,7 @@ from functions import get_metadata, read_params, get_grid, g2gf_1d
 
 ##### USER DEFINED VARIABLES #####
 
-params_file = "../params.dat"
+params_file = "./params.dat"
 
 ##### ---------------------- #####
 
@@ -50,7 +50,7 @@ fig, axs = plt.subplots(1,2,figsize=(15, 5))
 ims = np.array([None,None])
 cb = np.array([None,None])
 
-contour_lvls_b = np.linspace(0.01, np.max(th1_xz[0]), 30)
+contour_lvls_b = np.linspace(1e-3, np.max(th1_xz[0]), 30)
 #contour_lvls_trace = np.linspace(0.01, 0.1, 8)
 contour_lvls_trace = np.linspace(0.01, 0.2, 8)
 
@@ -80,7 +80,7 @@ def animate(step):
 
     ims[0].set_array(th1_xz[step].ravel())
     ims[1].set_array(th2_xz[step].ravel())
-    fig.suptitle("$\\theta_1$, time = {0:.4f} hours".format(times[step]/3600))
+    fig.suptitle("$\\theta_1$, time = {0:.2f} seconds".format(times[step]))
 
     for coll in c_b.collections:
         coll.remove()

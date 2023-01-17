@@ -88,7 +88,7 @@ scatter = np.log(scatter)
 fig,ax = plt.subplots(1,2, figsize=(15,5))
 fig.suptitle("time = 0.00 s")
 
-contours_b = np.linspace(0, 0.5*bmax, 8)
+contours_b = np.linspace(0, bmax, 8)
 
 scatter[:, 0, 0] = np.NaN
 
@@ -98,9 +98,9 @@ im = ax[1].scatter(sx, sy, c=scatter[-1], cmap='jet')
 trac_im = ax[0].pcolormesh(X, Y, t[-1], cmap='jet')
 b_cont = ax[0].contour(Xf, Yf, b[-1], levels = contours_b, colors='white', alpha=0.8)
 
-ax[1].set_xlabel("b anomaly")
+ax[1].set_xlabel("buoyancy")
 ax[1].set_ylabel("tracer")
-ax[1].set_xlim(bmin, bbins[20])
+ax[1].set_xlim(bmin, bmax)
 ax[1].set_ylim(tmin, tmax)
 
 def animate(step):
@@ -120,7 +120,7 @@ def animate(step):
 
     ax[1].set_xlabel("buoyancy")
     ax[1].set_ylabel("tracer")
-    ax[1].set_xlim(bmin, bbins[20])
+    ax[1].set_xlim(bmin, bmax)
     ax[1].set_ylim(tmin, tmax)
 
     #im.set_clim(0, 0.5*np.nanmax(scatter[step]))

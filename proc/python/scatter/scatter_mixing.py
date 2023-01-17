@@ -50,7 +50,15 @@ with h5py.File(join(save_dir,"movie.h5"), 'r') as f:
     u = g2gf_1d(md,u)
     v = np.array([np.array(f['v_xz'][t]) for t in time_keys])
     v = g2gf_1d(md,v)
+    w = np.array([np.array(f['w_xz'][t]) for t in time_keys])
+    w = g2gf_1d(md,w)
 
+    eps = np.array([np.array(f['epsilon_xz'][t]) for t in time_keys])
+    eps = g2gf_1d(md,eps)
+    kappa = np.array([np.array(f['kappa_t1_xz'][t]) for t in time_keys])
+    kappa = g2gf_1d(md,kappa)
+    nu_t = np.array([np.array(f['nu_t_xz'][t]) for t in time_keys])
+    nu_t = g2gf_1d(md,nu_t)
     diapycvel = np.array([np.array(f['diapycvel1_xz'][t]) for t in time_keys])
     diapycvel = g2gf_1d(md,diapycvel)
     chi_b = np.array([np.array(f['chi1_xz'][t]) for t in time_keys])
@@ -88,11 +96,30 @@ u_z = np.gradient(u, gzf, axis=1)
 v_z = np.gradient(v, gzf, axis=1)
 N2 = np.gradient(b, gzf, axis=1)
 
-Ri = 2*np.where(np.logical_and(z_coords < md['H'], b<1e-3), np.inf, N2)/(np.power(u_z, 2) + np.power(v_z, 2))
+# Get az data
+with h5py.File(join(save_dir,"az_stats.h5"), 'r') as f:
+    print("Keys: %s" % f.keys())
+    time_keys = list(f['u_az'].keys())
+    wbar = np.array([np.array(f['w_az'][t]) for t in time_keys])
+    bbar = np.array([np.array(f['b_az'][t]) for t in time_keys])
 
-field = chi_t
-f_thresh = 5e-8
-field_str = "$\chi_t$"
+wbar2 = np.concatenate((np.flip(wbar,axis=2), wbar), axis=2)
+wfluc = w-wbar2
+
+bbar2 = np.concatenate((np.flip(bbar,axis=2), bbar), axis=2)
+bfluc = b-bbar2
+
+Ri = 2*np.where(np.logical_and(z_coords < md['H'], b<1e-3), np.inf, N2)/(np.power(u_z, 2) + np.power(v_z, 2))
+e = kappa * diapycvel/md['N2']
+B = bfluc * wfluc
+eps *= (md['nu'] + nu_t)/md['nu']
+Re_b = eps/((md['nu'] + nu_t)*np.abs(np.where(np.logical_and(z_coords < md['H'], b<1e-3), 1e5, N2)))
+Re_b = np.log(Re_b)
+eps = np.log(eps)
+
+field = B
+f_thresh = 1e-5
+field_str = "B"
 
 #########################################################
 # Restrict arrays
@@ -123,7 +150,7 @@ tmax = md['phi_factor']*5*F0 / (3 * alpha) * np.power(0.9*alpha*F0, -1/3) * np.p
 
 Nb = int(md['Nb'])
 Nt = int(md['Nphi'])
-db = round((bmax - bmin)/Nb,3)
+db = (bmax - bmin)/Nb
 dt = (tmax - tmin)/Nt
 dx = md['LX']/md['Nx']
 dy = md['LY']/md['Ny']
