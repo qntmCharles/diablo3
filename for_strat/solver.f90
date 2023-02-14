@@ -78,9 +78,9 @@
           do i=0, Nxm1
             call random_number(rnum1)
             if ((n == 2).and.(f_type == 7)) then
-              s1(i,k,j) = (th(i,k,j,n) - b_m(j) * &
-                   (tanh((sqrt((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0)+2*r_m(j))/1.d-3) - &
-                    tanh((sqrt((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0)-2*r_m(j))/1.d-3)) * &
+              s1(i,k,j) = (th(i,k,j,n) - b_m(j) * 2.d-1 * &
+                   (tanh((sqrt((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0)+4*r_m(j))/1.d-3) - &
+                    tanh((sqrt((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0)-4*r_m(j))/1.d-3)) * &
                 (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
                 (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / &
                 tau_sponge
@@ -88,7 +88,7 @@
               s1(i,k,j) = (th(i,k,j,n) - 2*b_m(j) * &
                 exp(-((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp + k)-Lz/2.d0)**2.d0) / &
                 (2.d0*r_m(j)**2.d0)) * &
-                cos(sqrt((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp + k)-Lz/2.d0)**2.d0))**2.d0 * &
+                cos(sqrt((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp + k)-Lz/2.d0)**2.d0)/r_m(j))**2.d0 * &
                 (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
                 (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / &
                 tau_sponge
@@ -194,9 +194,7 @@
    end if
 
    ! Add sponge layer forcing
-   !do n = 1, N_th
-     !call sponge_th(n)
-   !end do
+   !call sponge_th(1)
    call sponge_vel
 
    return
@@ -226,7 +224,7 @@
    ! Set the amplitude of the sponge
    sponge_amp = Sb_amp
    ! Set the top of the computational domain in physical units
-   L_top = 0.4d0
+   L_top = LY
    ! Set the bottom of the sponge layer in physical units
    L_sponge = L_top - S_depth
    do j = 0, Nyp + 1
@@ -274,7 +272,8 @@
    ! Damp the perturbations towards 0
    do k = 0, twoNkz
      do i = 0, Nxp - 1
-       if ((rankZ /= 0) .or. (i /= 0) .or. (k /= 0)) then
+       !if ((rankZ /= 0) .or. (i /= 0) .or. (k /= 0)) then
+       if ((i /= 0) .or. (k /= 0)) then
          do j = jstart_th(n), jend_th(n)
            cfth(i, k, j, n) = cfth(i, k, j, n) &
                               - sponge_sigma(j) * (cth(i, k, j, n) - 0.)
@@ -397,9 +396,9 @@ subroutine sponge_vel
   real(rkind) sponge_sigma(0:Nyp + 1)
 
   ! Set the amplitude of the sponge
-  sponge_amp = Sb_amp
+  sponge_amp = Svel_amp
   ! Set the top of the computational domain in physical units
-  L_top = 0.4d0
+  L_top = LY
   ! Set the bottom of the sponge layer in physical units
   L_sponge = L_top - S_depth
   do j = 0, Nyp + 1
@@ -720,7 +719,7 @@ subroutine rk_chan_1
   ! Here, velocity and CFi should be in Fourier space
   ! The subgrid scale stress is added to CFi:   CFi=CFi - d/dx_i tau_ij
 
-  if (use_LES .and. ((.not. create_new_flow) .or. (time_step > 100))) then
+  if (use_LES .and. ((.not. create_new_flow) .or. (time_step > LES_start))) then
     ! If we have created new flow with random perturbations, wait for a
     ! spinup before applying the subgrid model for stability purposes
     ! In the process (les_chan), Ui is converted to physical space
@@ -962,10 +961,10 @@ subroutine rk_chan_1
   do j = jstart, jend
     do k = 0, Nzp - 1
       do i = 0, Nxm1
-        r1(i, k, j) = r1(i, k, j) + temp1 * nu_v_scale * &
+        r1(i, k, j) = r1(i, k, j) + temp1 * &
                       (((u1(i, k, j + 1) - u1(i, k, j)) / dy(j + 1) &
                         - (u1(i, k, j) - u1(i, k, j - 1)) / dy(j)) / dyf(j))
-        r3(i, k, j) = r3(i, k, j) + temp1 * nu_v_scale * &
+        r3(i, k, j) = r3(i, k, j) + temp1 * &
                       (((u3(i, k, j + 1) - u3(i, k, j)) / dy(j + 1) &
                         - (u3(i, k, j) - u3(i, k, j - 1)) / dy(j)) / dyf(j))
       end do
@@ -974,7 +973,7 @@ subroutine rk_chan_1
   do j = 2, Nyp
     do k = 0, Nzp - 1
       do i = 0, Nxm1
-        r2(i, k, j) = r2(i, k, j) + temp1 * nu_v_scale * &
+        r2(i, k, j) = r2(i, k, j) + temp1 * &
                       (((u2(i, k, j + 1) - u2(i, k, j)) / dyf(j) &
                         - (u2(i, k, j) - u2(i, k, j - 1)) / dyf(j - 1)) / dy(j))
       end do
@@ -1093,7 +1092,7 @@ subroutine rk_chan_1
     do j = jstart_th(n), jend_th(n)
       do k = 0, Nzp - 1
         do i = 0, Nxm1
-          rth(i, k, j, n) = rth(i, k, j, n) + (temp1 / Pr(n)) * nu_v_scale * ( &
+          rth(i, k, j, n) = rth(i, k, j, n) + (temp1 / Pr(n)) * ( &
                             ((th(i, k, j + 1, n) - th(i, k, j, n)) / dy(j + 1) &
                              - (th(i, k, j, n) - th(i, k, j - 1, n)) / dy(j)) / dyf(j))
         end do
@@ -1132,10 +1131,10 @@ subroutine rk_chan_1
     do k = 0, Nzp - 1
       do j = jstart_th(n), jend_th(n)
         do i = 0, Nxm1
-          matl(i, j) = -(temp1 / Pr(n) * nu_v_scale) / (dy(j) * dyf(j))
-          matd(i, j) = 1.+(temp1 / Pr(n) * nu_v_scale) / (dy(j + 1) * dyf(j)) &
-                       + (temp1 / Pr(n) * nu_v_scale) / (dy(j) * dyf(j))
-          matu(i, j) = -(temp1 / Pr(n) * nu_v_scale) / (dy(j + 1) * dyf(j))
+          matl(i, j) = -(temp1 / Pr(n)) / (dy(j) * dyf(j))
+          matd(i, j) = 1.+(temp1 / Pr(n)) / (dy(j + 1) * dyf(j)) &
+                       + (temp1 / Pr(n)) / (dy(j) * dyf(j))
+          matu(i, j) = -(temp1 / Pr(n)) / (dy(j + 1) * dyf(j))
           ! Define RHS vector
           vec(i, j) = rth(i, k, j, n)
         end do
@@ -1194,10 +1193,10 @@ subroutine rk_chan_1
   do k = 0, Nzp - 1
     do j = 2, Nyp
       do i = 0, Nxm1
-        matl(i, j) = -temp1 * nu_v_scale / (dyf(j - 1) * dy(j))
-        matd(i, j) = 1.+temp1 * nu_v_scale / (dyf(j) * dy(j)) &
-                     + temp1 * nu_v_scale / (dyf(j - 1) * dy(j))
-        matu(i, j) = -temp1 * nu_v_scale / (dyf(j) * dy(j))
+        matl(i, j) = -temp1 / (dyf(j - 1) * dy(j))
+        matd(i, j) = 1.+temp1 / (dyf(j) * dy(j)) &
+                     + temp1 / (dyf(j - 1) * dy(j))
+        matu(i, j) = -temp1 / (dyf(j) * dy(j))
         vec(i, j) = r2(i, k, j)
       end do
     end do
@@ -1249,10 +1248,10 @@ subroutine rk_chan_1
   do k = 0, Nzp - 1
     do j = jstart, jend
       do i = 0, Nxm1
-        matl(i, j) = -temp1 * nu_v_scale / (dy(j) * dyf(j))
-        matd(i, j) = 1.-temp1 * nu_v_scale * (-1./(dy(j + 1) * dyf(j)) &
+        matl(i, j) = -temp1 / (dy(j) * dyf(j))
+        matd(i, j) = 1.-temp1 * (-1./(dy(j + 1) * dyf(j)) &
                                               - 1./(dy(j) * dyf(j)))
-        matu(i, j) = -temp1 * nu_v_scale / (dy(j + 1) * dyf(j))
+        matu(i, j) = -temp1 / (dy(j + 1) * dyf(j))
         vec(i, j) = r1(i, k, j)
       end do
     end do
@@ -1305,10 +1304,10 @@ subroutine rk_chan_1
   do k = 0, Nzp - 1
     do j = jstart, jend
       do i = 0, Nxm1
-        matl(i, j) = -temp1 * nu_v_scale / (dy(j) * dyf(j))
-        matd(i, j) = 1.-temp1 * nu_v_scale * (-1./(dy(j + 1) * dyf(j)) &
+        matl(i, j) = -temp1 / (dy(j) * dyf(j))
+        matd(i, j) = 1.-temp1 * (-1./(dy(j + 1) * dyf(j)) &
                                               - 1./(dy(j) * dyf(j)))
-        matu(i, j) = -temp1 * nu_v_scale / (dy(j + 1) * dyf(j))
+        matu(i, j) = -temp1 / (dy(j + 1) * dyf(j))
         vec(i, j) = r3(i, k, j)
       end do
     end do

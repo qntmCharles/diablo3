@@ -65,6 +65,11 @@ program diablo
     if (verbosity > 2 .and. rank == 0) &
       write (*, '("Now beginning time step ", I10)') time_step
 
+    if (time_step == time_nu_run) then
+      nu = nu_run
+      if (verbosity > 2 .and. rank == 0) write (*,*) "Now changing viscosity to ", nu_run
+    end if
+
     do rk_step = 1, 3
       if (time_ad_meth == 1) call rk_chan_1
       if (time_ad_meth == 2) call rk_chan_2

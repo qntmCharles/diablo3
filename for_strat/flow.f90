@@ -10,10 +10,14 @@ module flow
 
   ! 3D
   real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1,s2,s3,s4,s5, s6, &
-                                                           ur, utheta, u_sfluc, v_sfluc, w_sfluc, b_sfluc
+                                                           ur, utheta, u_sfluc, v_sfluc, w_sfluc, b_sfluc, &
+                                                           chi_field, Ri_field, Re_b_field, e_field, &
+                                                           tke_field, pdf_field, svd_field, B_field
   complex(rkind), pointer, contiguous, dimension(:,:,:) :: cu1,cu2,cu3,cp,cr1,cr2,cr3,cf1,cf2,cf3, &
                                                            cs1,cs2,cs3,cs4, cs5, cs6, cur, cutheta, cu_sfluc, &
-                                                           cv_sfluc, cw_sfluc, cb_sfluc
+                                                           cv_sfluc, cw_sfluc, cb_sfluc, &
+                                                           cchi_field, cRi_field, cRe_b_field, ce_field, &
+                                                           ctke_field, cpdf_field, csvd_field, cB_field
 
   ! 4D
   real(rkind), pointer, contiguous, dimension(:,:,:,:) :: th,fth,rth, th_mem
@@ -155,7 +159,9 @@ contains
       time_step = 0
       time = 0
 
+      write_bins_flag = .true.
       call save_stats(save_movie_dt/=0,.false.)
+      write_bins_flag = .false.
       if (use_LES) call save_stats_LES_OOL(.true.)
     end if
 
@@ -203,6 +209,14 @@ contains
     call alloc_array3D(w_sfluc,cw_sfluc)
     call alloc_array3D(b_sfluc,cb_sfluc)
 
+    call alloc_array3D(chi_field,cchi_field)
+    call alloc_array3D(Ri_field,cRi_field)
+    call alloc_array3D(Re_b_field,cRe_b_field)
+    call alloc_array3D(e_field,ce_field)
+    call alloc_array3D(tke_field,ctke_field)
+    call alloc_array3D(B_field,cB_field)
+    call alloc_array3D(pdf_field,cpdf_field)
+    call alloc_array3D(svd_field,csvd_field)
 
     call alloc_array4D(th, cth)   ! Not using the same memory!
     call alloc_array4D(fth,cfth)
@@ -770,6 +784,7 @@ contains
     !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 
     character(len=55) fname
+    character(len=20) gname
     integer i, j, k, n
 
     fname = 'start.h5'
@@ -778,6 +793,14 @@ contains
 
     call mpi_barrier(mpi_comm_world, ierror)
     call ReadHDF5(fname)
+
+    if (rank == 0) then
+      gname = 'weights_flux_mem'
+      call ReadHDF5_plane(fname, gname, weights_flux_mem)
+      write(*,*) "FLUX", weights_flux_mem(1,1)
+      gname = 'weights_flux_cum'
+      call ReadHDF5_plane(fname, gname, weights_flux_cum)
+    end if
 
     ! Apply initial boundary conditions, set ghost cells
     call apply_BC_vel_mpi_post
@@ -791,6 +814,7 @@ contains
     !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 
     character(len=55) fname
+    character(len=20) gname
     integer i, j, k, n
     logical final, save_pressure
     real(rkind) wall_begin
@@ -815,6 +839,14 @@ contains
     end if
     call mpi_barrier(mpi_comm_world, ierror)
     call WriteHDF5(fname, save_pressure)
+
+    if (rank == 0) then
+      gname = 'weights_flux_mem'
+      call WriteHDF5_plane(fname, gname, weights_flux_mem)
+      write(*,*) "FLUX", weights_flux_mem(1,1)
+      gname = 'weights_flux_cum'
+      call WriteHDF5_plane(fname, gname, weights_flux_cum)
+    end if
 
     call wall_time(end_wall_time)
     if (rank == 0) &
@@ -855,6 +887,7 @@ subroutine courant
   integer i, j, k, n
   integer imin, jmin, kmin
   real(rkind) r_max ! Maximum fractional change in dt
+  real(rkind) nu_t_max, kappa_t_max(1:N_th)
 
   ! Set the initial dt to some arbitrary large number
   dt = 1.d0
@@ -864,6 +897,19 @@ subroutine courant
   do n = 1, N_th
     dt = min(dt, dt * nu / (nu / Pr(n)))
   end do
+  ! Make sure that turbulent viscosity and diffusivity are captured
+  if (use_LES .and. ((time_step > LES_start).and.(time_step < LES_dt_end))) then
+    nu_t_max = maxval(nu_t)
+    call get_maximum_mpi(nu_t_max)
+    dt = min(dt, 0.5d0 * min(dx(1), dz(1))**(2.d0 * beta) / nu_t_max)
+    !write(*,*) "nu", nu_t_max
+    do n = 1, N_th
+      kappa_t_max(n) = maxval(kappa_t(:,:,:,n))
+      call get_maximum_mpi(kappa_t_max(n))
+      dt = min(dt, dt * nu / kappa_t_max(n))
+      !write(*,*) "kappa", kappa_t_max(n)
+    end do
+  end if
   ! Make sure that we capture the inertial period (for rotating flows)
   if (Ro_inv /= 0.d0) then
     dt = min(dt, 2.d0 * pi / abs((Ro_inv / delta)) / 20.d0)
@@ -941,7 +987,8 @@ subroutine courant
     delta_t = dt
   end if
   
-  if (rank == 0) write (*,*) delta_t
+  if (rank == 0) write (*,*) "dt", delta_t
+  if (rank == 0) write (*,*) "nu", nu
 
   ! if (time + delta_t > save_stats_time) then
   !   delta_t = save_stats_time - time + 1.d-14
