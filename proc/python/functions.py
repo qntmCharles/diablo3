@@ -3,6 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from os.path import join
 from scipy import integrate
+import fortranformat as ff
 
 def get_index(z, griddata):
     return int(np.floor(np.argmin(np.abs(griddata - z))))
@@ -44,7 +45,9 @@ def get_metadata(run_dir, version):
     grid_params = ["Nx", "Ny", "Nz", "Nth"]
     if version == "3.8":
         chan_params = ["r0", "alpha_e", "b0", "Lyc", "Lyp", "S_depth", "N2", "H",
-                "Q0","b_factor", "phi_factor", "Nb", "Nphi","F_TYPE"]
+                "Q0","b_factor", "phi_factor", "Nb", "Nphi","F_TYPE", "Omega_thresh"]
+        params = ["LX", "LY", "LZ", "RE", "SAVE_MOVIE_DT", "SAVE_STATS_DT",
+                "LES_DT_END", "NU_START", "NU_RUN", "SAVE_FLOW_DT", "VERSION"]
 
     for params_file, parameters in zip(["/input.dat", "/input_chan.dat"],[params,chan_params]):
         with open(run_dir+params_file, 'r') as f:
@@ -64,9 +67,14 @@ def get_metadata(run_dir, version):
                         param_col = words.index(name)-len(words)
 
             if param_line > 0:
-                md[name] = float(lines[param_line+1].split()[param_col])
-                if name == "RE":
-                    md['nu'] = 1/md["RE"]
+                if name in ["NU_RUN", "Omega_thresh"]:
+                    reader = ff.FortranRecordReader('ES12.5')
+                    md[name] = reader.read(lines[param_line+1].split()[param_col])[0]
+                else:
+                    md[name] = float(lines[param_line+1].split()[param_col])
+                    if name == "RE":
+                        md['nu'] = 1/md["RE"]
+
 
     with open(run_dir+"/grid_def.all",'r') as f:
         lines = list(f.read().splitlines())

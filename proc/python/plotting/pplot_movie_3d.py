@@ -33,11 +33,11 @@ with h5py.File(save_dir+"/movie.h5", 'r') as f:
     time_keys = list(f['th1_xy'])
     print(time_keys)
     # Get buoyancy data
-    #th1_xy = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
-    #th1_zy = np.array([np.array(f['th2_xz'][t]) for t in time_keys])
+    th1_xy = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
+    th1_zy = np.array([np.array(f['th2_xz'][t]) for t in time_keys])
 
-    th1_xy = np.array([np.array(f['chi1_xz'][t]) for t in time_keys])
-    th1_zy = np.array([np.array(f['diapycvel1_xz'][t]) for t in time_keys])
+    #th1_xy = np.array([np.array(f['chi1_xz'][t]) for t in time_keys])
+    #th1_zy = np.array([np.array(f['diapycvel1_xz'][t]) for t in time_keys])
 
     th1_xy = g2gf_1d(md, th1_xy)
     th1_zy = g2gf_1d(md, th1_zy)
@@ -65,10 +65,8 @@ axs[1].axhline(md['Lyc']+md['Lyp'],color='white', linestyle=':')
 
 cb[0] = plt.colorbar(ims[0],ax=axs[0])
 cb[1] = plt.colorbar(ims[1],ax=axs[1])
-#ims[0].set_clim(0, .5*md['N2']*(md['LY']-md['H']))
-ims[0].set_clim(0, 2.5e-7)
 
-ims[1].set_clim(-4e-2, 4e-2)
+#ims[1].set_clim(-4e-2, 4e-2)
 
 r0 = md['r0']
 F0 = md['b0'] * r0**2
@@ -77,7 +75,9 @@ alpha = md['alpha_e']
 t_max = 5 * F0 * np.power(0.9 * alpha * F0, -1/3) * np.power(md['H'] + 5*r0/(6*alpha), -5/3) / \
         (3 * alpha)
 print(t_max)
-ims[1].set_clim(0, t_max)
+
+ims[0].set_clim(0, .5*md['N2']*(md['LY']-md['H']))
+ims[1].set_clim(0, 2*md['phi_factor']*t_max)
 
 fig.suptitle("$\\theta_1$, time = 0 secs")
 axs[0].set_ylabel("$z$")
@@ -85,8 +85,8 @@ axs[1].set_ylabel("$z$")
 axs[0].set_xlabel("$x$")
 axs[1].set_xlabel("$y$")
 
-axs[0].set_ylim(md['H'], md['LY'])
-axs[1].set_ylim(md['H'], md['LY'])
+axs[0].set_ylim(0, md['H'])
+axs[1].set_ylim(0, md['H'])
 
 axs[0].set_xlim(0.2, 0.4)
 axs[1].set_xlim(0.2, 0.4)

@@ -18,8 +18,8 @@ save = False
 title = True
 show = True
 
-z_upper = 90
-z_lower = 20
+z_upper = 0.19 / 0.002
+z_lower = 0.15 / 0.002
 
 eps = 0.02
 

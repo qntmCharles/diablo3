@@ -17,13 +17,13 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 ##### USER-DEFINED PARAMETERS #####
 params_file = "./params.dat"
-save_loc = "/home/cwp29/Documents/essay/figs/mvr/"
-save = True
+#save_loc = "/home/cwp29/Documents/essay/figs/mvr/"
+save = False
 title = False
 show = not save
 
-z_upper = 70 # non-dim, scaled by r_0
-z_lower = 35
+z_upper = 100 # non-dim, scaled by r_0
+z_lower = 75
 
 width = 12
 
@@ -537,8 +537,8 @@ plt.ylim(*yrange)
 plt.xlim(4,100)
 plt.xlabel("$(z - z_0)/r_0$")
 
-F_0 = md['Q0'] * np.pi * r_0**2
-#F_0 = md['b0'] * r_0**2
+#F_0 = md['Q0'] * np.pi * r_0**2
+F_0 = md['b0'] * r_0**2
 w_m_analytic = 5/6 * 1/alpha_p * np.power(9/10 * alpha_p * F_0/(theta_m_avg * beta_g_avg), 1/3) * \
         np.power(gzf, -1/3)
 b_m_analytic = 5/6 * F_0/(alpha_p*theta_m_avg) * np.power(9/10 * alpha_p * F_0/(theta_m_avg * \

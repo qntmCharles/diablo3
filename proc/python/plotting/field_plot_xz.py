@@ -29,8 +29,8 @@ with h5py.File(save_dir+"/movie.h5", 'r') as f:
     time_keys = list(f['th1_xz'])
     print(time_keys)
     # Get buoyancy data
-    th1_xz = np.array([np.array(f['chi1_xz'][t]) for t in time_keys])
-    th2_xz = np.array([np.array(f['th2_xz'][t]) for t in time_keys])
+    th1_xz = np.array([np.array(f['chi1_xy'][t]) for t in time_keys])
+    th2_xz = np.array([np.array(f['th2_xy'][t]) for t in time_keys])
 
     th1_xz = g2gf_1d(md, th1_xz)
     th2_xz = g2gf_1d(md, th2_xz)
@@ -42,20 +42,8 @@ with h5py.File(save_dir+"/movie.h5", 'r') as f:
 print("Total time steps: %s"%NSAMP)
 print("Dimensional times: ",times)
 
-plot_min = 0.2
-plot_max = 0.4
-
-idx_minf = get_plotindex(plot_min, gzf)
-idx_maxf = get_plotindex(plot_max, gzf)+1
-
-idx_min = idx_minf+1
-idx_max = idx_maxf+2
-
-th1_xz = th1_xz[:, idx_minf:idx_maxf, :]
-th2_xz = th2_xz[:, idx_minf:idx_maxf, :]
-
-X, Y = np.meshgrid(gx, gz[idx_min:idx_max])
-Xf, Yf = np.meshgrid(gxf, gzf[idx_minf:idx_maxf])
+X, Y = np.meshgrid(gx, gx)
+Xf, Yf = np.meshgrid(gxf, gxf)
 
 print("Setting up data arrays...")
 fig, axs = plt.subplots(1,2,figsize=(15, 5))
@@ -64,8 +52,8 @@ cb = np.array([None,None])
 
 #contour_lvls_b = np.linspace(1e-3, np.max(th1_xz[-1]), 8)
 contour_lvls_b = [1e-8]
-#contour_lvls_trace = np.linspace(0.01, 0.2, 8)
-contour_lvls_trace = [5e-4]
+#contour_lvls_trace = np.linspace(0.01, 0.1, 8)
+contour_lvls_trace = np.linspace(0.01, 0.2, 8)
 
 print("Setting up initial plot...")
 ims[0] = axs[0].pcolormesh(X,Y,th1_xz[0], cmap='jet')
@@ -87,9 +75,6 @@ axs[0].set_ylabel("$z$")
 axs[1].set_ylabel("$z$")
 axs[0].set_xlabel("$x$")
 axs[1].set_xlabel("$y$")
-
-axs[0].set_ylim(plot_min, plot_max)
-axs[1].set_ylim(plot_min, plot_max)
 
 def animate(step):
     global c_b, c_trace

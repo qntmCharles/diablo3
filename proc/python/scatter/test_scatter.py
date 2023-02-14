@@ -51,5 +51,5 @@ print(scatter.shape)
 for i in range(NSAMP):
     print(times[i])
     im = plt.imshow(scatter[i])
-    im.set_clim(0, 0.1)
+    #im.set_clim(0, 0.1)
     plt.show()

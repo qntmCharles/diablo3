@@ -40,27 +40,32 @@ with h5py.File(join(save_dir,"movie.h5"), 'r') as f:
     time_keys = list(f['th1_xz'])
     print(time_keys)
     # Get buoyancy data
-    eps = np.array([np.array(f['epsilon_xz'][t]) for t in time_keys])
-    kappa = np.array([np.array(f['kappa_t1_xz'][t]) for t in time_keys])
-    nu_t = np.array([np.array(f['nu_t_xz'][t]) for t in time_keys])
-    diapycvel = np.array([np.array(f['diapycvel1_xz'][t]) for t in time_keys])
+
+    Re_b = np.array([np.array(f['Re_b_xz'][t]) for t in time_keys])
+    Ri = np.array([np.array(f['Ri_xz'][t]) for t in time_keys])
+    eps = np.array([np.array(f['tke_xz'][t]) for t in time_keys])
+    e = np.array([np.array(f['diapycvel1_xz'][t]) for t in time_keys])
     chi = np.array([np.array(f['chi1_xz'][t]) for t in time_keys])
+    B = np.array([np.array(f['B_xz'][t]) for t in time_keys])
+    nu_t = np.array([np.array(f['nu_t_xz'][t]) for t in time_keys])
     b = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
     t = np.array([np.array(f['th2_xz'][t]) for t in time_keys])
     u = np.array([np.array(f['u_xz'][t]) for t in time_keys])
     v = np.array([np.array(f['v_xz'][t]) for t in time_keys])
     w = np.array([np.array(f['w_xz'][t]) for t in time_keys])
 
-    eps = g2gf_1d(md, eps)
-    kappa = g2gf_1d(md, kappa)
-    nu_t = g2gf_1d(md, nu_t)
-    diapycvel = g2gf_1d(md, diapycvel)
-    chi = g2gf_1d(md, chi)
-    b = g2gf_1d(md, b)
-    t = g2gf_1d(md, t)
-    u = g2gf_1d(md, u)
-    v = g2gf_1d(md, v)
-    w = g2gf_1d(md, w)
+    #TODO work out why g2gf_1d ruins some fields...
+    #eps = g2gf_1d(md, eps)
+    #Ri = g2gf_1d(md, Ri)
+    #Re_b = g2gf_1d(md, Re_b)
+    #nu_t = g2gf_1d(md, nu_t)
+    #e = g2gf_1d(md, e)
+    #chi = g2gf_1d(md, chi)
+    #b = g2gf_1d(md, b)
+    #t = g2gf_1d(md, t)
+    #u = g2gf_1d(md, u)
+    #v = g2gf_1d(md, v)
+    #w = g2gf_1d(md, w)
 
     NSAMP = len(b)
     times = np.array([f['th1_xz'][t].attrs['Time'] for t in time_keys])
@@ -98,18 +103,8 @@ Xf, Yf = np.meshgrid(gxf, gzf[idx_minf:idx_maxf])
 
 u_z = np.gradient(u, gzf, axis=1)
 v_z = np.gradient(v, gzf, axis=1)
+w_z = np.gradient(w, gzf, axis=1)
 N2 = np.gradient(b, gzf, axis=1)
-
-Ri = 2*np.where(np.logical_and(z_coords < md['H'], b<1e-3), np.inf, N2)/(np.power(u_z, 2) + np.power(v_z, 2))
-
-e = kappa * diapycvel/md['N2']
-B = bfluc * wfluc
-eps *= (md['nu'] + nu_t)/md['nu']
-Re_b = eps/((md['nu'] + nu_t)*np.abs(np.where(np.logical_and(z_coords < md['H'], b<1e-3), 1e5, N2)))
-#Re_b = eps/((md['nu'])*np.abs(np.where(np.logical_and(z_coords < md['H'], b<1e-3), 1e5, md['N2'])))
-#Re_b = eps/(md['nu']*md['N2'])
-#Re_b = eps/((md['nu'] + nu_t)*md['N2'])
-Re_b = np.log(Re_b)
 
 # Restrict to penetration region
 chi = chi[:, idx_min:idx_max, :]
@@ -123,14 +118,6 @@ Ri = Ri[:, idx_min:idx_max, :]
 B = B[:, idx_min:idx_max, :]
 trac = trac[:, idx_min:idx_max, :]
 
-
-#for i in range(NSAMP):
-    #eps[i] = ndimage.gaussian_filter(eps[i], 0.2)
-    #e[i] = ndimage.gaussian_filter(e[i], 0.2)
-
-# Adjustment for sgs effects
-eps = np.log(eps)
-
 print("Total time steps: %s"%NSAMP)
 print("Dimensional times: ",times)
 
@@ -140,7 +127,9 @@ contour_lvls_t = [1e-3]
 
 """ ----------------------------------------------------------------------------------------------------- """
 
-step = 48
+step = 30
+if step >= NSAMP:
+    step = int(input("Chosen timestep out of simulation range. Pick again: "))
 
 """ ----------------------------------------------------------------------------------------------------- """
 
@@ -186,8 +175,8 @@ Re_b_contour_t = ax[0,2].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors=
 Re_b_divider = make_axes_locatable(ax[0,2])
 Re_b_cax = Re_b_divider.append_axes("right", size="5%", pad=0.05)
 Re_b_cb = plt.colorbar(Re_b_im, cax=Re_b_cax)
-#Re_b_max = 0.9*np.max(Re_b[-1])
-Re_b_im.set_clim(0, 8)
+Re_b_max = 0.9*np.max(Re_b[-1])
+Re_b_im.set_clim(0, Re_b_max)
 
 ax[0,2].set_title("(c) Buoyancy Reynolds number $\\mathrm{{Re}}_b$ (log scale)")
 
@@ -210,7 +199,7 @@ e_contour_t = ax[1,1].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='gr
 e_divider = make_axes_locatable(ax[1,1])
 e_cax = e_divider.append_axes("right", size="5%", pad=0.05)
 e_cb = plt.colorbar(e_im, cax=e_cax)
-e_max = 0.2*np.max(np.abs(e[step]))
+e_max = 1e-2*np.max(np.abs(e[step]))
 e_im.set_clim(-e_max, e_max)
 
 ax[1,1].set_title("(e) Diapycnal flux $e$")

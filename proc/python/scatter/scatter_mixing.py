@@ -9,7 +9,7 @@ import matplotlib
 import matplotlib.animation as animation
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from datetime import datetime
-from functions import get_metadata, read_params, get_grid, g2gf_1d
+from functions import get_metadata, read_params, get_grid, g2gf_1d, get_plotindex
 from scipy import ndimage, interpolate, spatial
 
 ##### USER DEFINED VARIABLES #####
@@ -76,11 +76,11 @@ plot_max = 1.6*md['H']
 plot_min = 0.95*md['H']
 start_idx = get_index(3.5, times)
 
-idx_max = get_index(plot_max, gz)
-idx_min = get_index(plot_min, gz)-1
+idx_minf = get_plotindex(plot_min, gzf)-1
+idx_maxf = get_plotindex(plot_max, gzf)
 
-idx_maxf = get_index(plot_max, gzf)
-idx_minf = get_index(plot_min, gzf)
+idx_min = idx_minf
+idx_max = idx_maxf+1
 
 print(idx_min, idx_max)
 print(idx_minf, idx_maxf)

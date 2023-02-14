@@ -303,5 +303,5 @@ for d in range(len(dirs)):
     ax[0,d].set_xlim(0.2, 0.4)
 
 #plt.tight_layout()
-plt.savefig('/home/cwp29/Documents/essay/figs/comp_pdf.png', dpi=300)
+#plt.savefig('/home/cwp29/Documents/essay/figs/comp_pdf.png', dpi=300)
 plt.show()

@@ -118,7 +118,7 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
         w_az = f['w_az']
         b_az = f['b_az']
         p_az = f['p_az']
-        #th_az = f['th_az']
+        th_az = f['th_az']
 
         # Spatial fluctuations
         uu_sfluc = f['uu_sfluc']
@@ -150,7 +150,7 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
         wbar = w_az[time_keys[0]][()]*md['SAVE_STATS_DT']
         bbar = b_az[time_keys[0]][()]*md['SAVE_STATS_DT']
         pbar = p_az[time_keys[0]][()]*md['SAVE_STATS_DT']
-        #thbar = th_az[time_keys[0]][()]*md['SAVE_STATS_DT']
+        thbar = th_az[time_keys[0]][()]*md['SAVE_STATS_DT']
 
         uu_sfluc_bar = uu_sfluc[time_keys[0]][()]*md['SAVE_STATS_DT']
         uv_sfluc_bar = uv_sfluc[time_keys[0]][()]*md['SAVE_STATS_DT']
@@ -190,14 +190,14 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
         wbar /= t_run
         bbar /= t_run
         pbar /= t_run
-        #thbar /= t_run
+        thbar /= t_run
 
         data_dict['u'] = ubar
         data_dict['v'] = vbar
         data_dict['w'] = wbar
         data_dict['p'] = pbar
         data_dict['b'] = bbar
-        #data_dict['th'] = thbar
+        data_dict['th'] = thbar
 
         uu_sfluc_bar /= t_run
         uv_sfluc_bar /= t_run
