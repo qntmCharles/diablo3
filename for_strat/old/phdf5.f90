@@ -343,7 +343,6 @@ subroutine WriteStatH5_X(fname, gname, Diag, NperProc)
   ! FINISH DEFINITION
   ! *********************
 
-
   ! Initialize interface
   call h5open_f(Error)
 
@@ -1440,54 +1439,6 @@ subroutine WriteHDF5(fname, save_pressure)
     ! Close dateset
     call h5dclose_f(dset_id, Error)
   end do
-  
-  !!! CWP 2023 mixing metrics !!!
-  do ith = 1, 7
-
-    select case (ith)
-    case (1)
-      call swapzy(chi_field, tmp)
-      dname = "chi"
-    case (2)
-      call swapzy(Ri_field, tmp)
-      dname = "Ri"
-    case (3)
-      call swapzy(Re_b_field, tmp)
-      dname = "Re_b"
-    case (4)
-      call swapzy(e_field, tmp)
-      dname = "e"
-    case (5)
-      call swapzy(tke_field, tmp)
-      dname = "tke"
-    case (6)
-      call swapzy(svd_field, tmp)
-      dname = "SVD" 
-    case (7)
-      call swapzy(B_field, tmp)
-      dname = "B"
-    end select
-
-    call h5dcreate_f(gid, trim(dname), h5t_ieee_f64le, &
-                     filspace_id, dset_id, Error, dcpl_id=plist_id_d)
-
-    ! Select hyperslab in the file.
-    ! call h5dget_space_f(dsetur_id, selspace_id, Error)
-    call h5sselect_hyperslab_f(filspace_id, h5s_select_set_f, &
-                               offset, count, Error, stride, block)
-
-    call h5sselect_hyperslab_f(memspace_id, h5s_select_set_f, &
-                               offset_m, count, Error, stride, block)
-
-    ! Write the dataset collectively
-    call h5dwrite_f(dset_id, h5t_native_double, &
-                    tmp, &
-                    dimsm, Error, file_space_id=filspace_id, &
-                    mem_space_id=memspace_id, xfer_prp=plist_id_w)
-
-    ! Close dateset
-    call h5dclose_f(dset_id, Error)
-  end do
 
   !!! CWP 2022 output radial and tangential velocities !!!
   call swapzy(ur, tmp)
@@ -1591,130 +1542,8 @@ subroutine WriteHDF5(fname, save_pressure)
 end subroutine WriteHDF5
 
 
-!----*|--.---------.---------.---------.---------.---------.---------.-|-------|
-subroutine ReadHDF5_plane(fname, gname, var2d)
-  !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 
-  ! Writes out entire X-Y plane
-  use hdf5
 
-  character(len=35) fname
-
-  ! Dataset names
-  character(len=20) :: gname, dname
-
-  ! Identifiers
-  integer(hid_t) :: file_id, dset_id
-  integer(hid_t) :: filspace_id, memspace_id
-
-  ! Identifiers
-  integer(hid_t) :: gid, selspace_id
-  integer(hid_t) :: plist_id_d
-
-  ! Dimensions in the memory and in the file
-  integer(hsize_t), dimension(2) :: dimsm, dimsf
-
-  integer :: rHDF5 = 2
-  integer(hsize_t), dimension(1)       :: adims
-  integer(hid_t)                      :: aid, tspace
-
-  real(rkind), intent(inout) :: var2d(:, :)
-  integer nsamp
-  logical flage
-
-  integer(hsize_t), dimension(2) :: count, offset
-  integer(hsize_t), dimension(2) :: stride, block, offset_m
-
-  ! integer(hsize_t)  ::  my_dim
-  integer Error, i, j
-
-  ! *********************
-  ! START DEFINITION
-  ! *********************
-
-  dimsm(1:2) = (/size(var2d, 1), size(var2d, 2)/)
-  dimsf(1:2) = (/size(var2d, 1), size(var2d, 2)/)
-
-  block(1) = size(var2d, 1)
-  block(2) = size(var2d, 2)
-
-  ! Stride and count for number of rows and columns in each dimension
-  stride = 1
-  count = 1
-
-  ! Offset determined by the rank of a processor
-  offset(1:2) = 0
-  offset_m(1:2) = 0
-  
-  ! *********************
-  ! FINISH DEFINITION
-  ! *********************
-
-  ! Initialize interface
-  call h5open_f(Error)
-
-  ! Setup file access property list with parallel I/O access
-  call h5pcreate_f(h5p_file_access_f, plist_id_d, Error)
-  !call h5pset_fapl_mpio_f(plist_id_d, mpi_comm_world%mpi_val, &
-                          !mpi_info_null%mpi_val, Error)
-
-  ! Create the file collectively
-  call h5fopen_f(trim(fname), h5f_acc_rdonly_f, &
-                 file_id, Error, access_prp=plist_id_d)
-  call h5pclose_f(plist_id_d, Error)
-
-  ! -----------------------------
-  ! Read in var2d
-  ! -----------------------------
-
-  ! Create property list for collective dataset write
-  call h5pcreate_f(h5p_dataset_xfer_f, plist_id_d, Error)
-  
-  !call h5screate_f(h5s_scalar_f, tspace, Error)
-
-  call h5gopen_f(file_id, "/"//trim(gname), gid, Error)
-  call h5aopen_f(gid, 'SAMPLES', aid, Error)
-  call h5aread_f(aid, h5t_native_integer, nsamp, adims, Error)
-  call h5aclose_f(aid, Error)
-
-  write (dname, '(1I0.4)') nsamp
-  
-  ! Dataspace in memory
-  !call h5screate_simple_f(rHDF5, dimsf, filspace_id, Error)
-  call h5screate_simple_f(rHDF5, dimsm, memspace_id, Error)
-
-  call h5dopen_f(gid, trim(dname), dset_id, Error)
-  call h5dget_space_f(dset_id, filspace_id, Error)
-
-  ! Select hyperslab in the file
-  call h5sselect_hyperslab_f(filspace_id, h5s_select_set_f, &
-                             offset, count, Error, stride, block)
-  call h5sselect_hyperslab_f(memspace_id, h5s_select_set_f, &
-                             offset_m, count, Error, stride, block)
-
-  ! Write the dataset collectively
-
-  call h5dread_f(dset_id, h5t_native_double, &
-               var2d, &
-               dimsm, Error, file_space_id=filspace_id, &
-               mem_space_id=memspace_id) !, xfer_prp = plist_id_d)
-
-  ! Close dataset
-  call h5sclose_f(filspace_id, Error)
-  call h5dclose_f(dset_id, Error)
-
-  ! Close the dataspace for the memory
-  call h5sclose_f(memspace_id, Error)
-
-  ! Close the properties for the reading
-  call h5pclose_f(plist_id_d, Error)
-
-  ! Close groups
-  call h5gclose_f(gid, Error)
-  call h5fclose_f(file_id, Error)
-  call h5close_f(Error)
-
-end subroutine ReadHDF5_plane
 
 !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 subroutine ReadHDF5(fname)
@@ -1755,7 +1584,7 @@ subroutine ReadHDF5(fname)
   character(len=80)                        :: namnbuf
   character(len=20)                        :: sttimec
 
-  integer Error, ith, nsamp
+  integer Error, ith
 
   double precision En(4)
 
@@ -1817,6 +1646,7 @@ subroutine ReadHDF5(fname)
     call mpi_finalize(ierror)
     stop
   end if
+
 
   ! -----------------------------
   ! Timey Wimey Stuff

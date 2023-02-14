@@ -7,17 +7,31 @@ subroutine save_stats_chan(movie,final)
   character(len=35) fname
   character(len=20) gname, gnamef
   logical movie,final
-  integer i, j, k, n
+  integer i, j, k, n, l, m, phibin, bbin
 
+  ! Buoyancy binning
+  integer nbins, nbins_out
+  real(rkind) bmin, bmax, db_pdf, zmin, zmax, dz_max
+  real(rkind), allocatable :: bins(:)
+
+  ! PDF binning
+  real(rkind) pdf_min, pdf_max, dpdf
+
+  ! Net diffusivity calculation
+  real(rkind) dbdt_int, gradb2_int, kappa_net
 
   ! Scalar diagnostics
   real(rkind) thsum(0:Nyp + 1)
+  real(rkind) thcount(0:Nyp + 1)
   ! Store/write 2D slices
   real(rkind) varxy(0:Nxm1, 1:Nyp), varzy(0:Nzp - 1, 1:Nyp), varxz(0:Nxm1, 0:Nzp - 1)
 
   ! HDF5 writing
   real(rkind) Diag(1:Nyp)
   real(rkind) DiagX(0:Nxp - 1)
+  real(rkind) DiagPDF(0:int(nbins_pdf_out/NprocZ)-1)
+  real(rkind) DiagB(1:int(Nb_out/NprocZ))
+  real(rkind) DiagPhi(1:int(Nphi_out/NprocZ))
 
   if (rank == 0) &
     write (*, '("Saving Flow Statistics for Time Step       " I10)')  time_step
@@ -27,7 +41,6 @@ subroutine save_stats_chan(movie,final)
   call apply_BC_th_mpi_post
   call ghost_chan_mpi
   call ghost_chan_mpi_j0 ! Need the j = 0 boundary filled for les output
-
 
   if (rank == 0) write (*, '("Time    = " ES12.5 "       dt = " ES12.5)') time, dt ! Note: dt is the physical / CFL-constrained time-step
 
@@ -53,8 +66,6 @@ subroutine save_stats_chan(movie,final)
     call fft_xz_to_physical(cth(:, :, :, n), th(:, :, :, n))
   end do
 
-
-
   ! Compute ume(y), etc
   ! Also, computes Z-Averages ume_xy(x,y), etc, if not homogeneousX
   !   Otherwise, puts ume into ume_xy, etc
@@ -68,6 +79,9 @@ subroutine save_stats_chan(movie,final)
     call ghost_les_mpi ! Share nu_t
     call compute_TKE_diss_les
   end if
+  
+  ! Store epsilon
+  tke_field = f1
 
   !!! TKE / RMS Velocities !!!
   call compute_TKE(movie)
@@ -236,11 +250,6 @@ subroutine save_stats_chan(movie,final)
   end if
 
 
-
-
-
-
-
   !!! Iterate through all TH Statistics !!!
   do n = 1, N_th
     ! Store FF CTH crth(), and keep PP in th() (Already done above)
@@ -251,17 +260,134 @@ subroutine save_stats_chan(movie,final)
         do i = 0, Nxp - 1 ! Nkx
           ! Store gradients of TH(:,:,:,n) (if it is used) in CRi
           cr1(i, k, j) = cikx(i) * crth(i, k, j, n)
-          cr2(i, k, j) = (crth(i, k, j + 1, 1) - crth(i, k, j - 1, 1)) / (gyf(j + 1) - gyf(j - 1))
+          cr2(i, k, j) = (crth(i, k, j + 1, n) - crth(i, k, j - 1, n)) / (gyf(j + 1) - gyf(j - 1))
           cr3(i, k, j) = cikz(k) * crth(i, k, j, n)
         end do
       end do
     end do
+
     ! Convert gradients to physical space
     call fft_xz_to_physical(cr1, r1)
     call fft_xz_to_physical(cr2, r2)
     call fft_xz_to_physical(cr3, r3)
     ! (Already have th in PP)
 
+    !!! CWP(2022) net diffusivity calculation based on Penney et al. (2020) !!!
+    ! th_mem stores buoyancy from previous time step for calculating time derivative
+    dbdt_int = 0.d0
+    gradb2_int = 0.d0
+
+    do j = 1, Nyp
+      do k = 0, Nzp - 1
+        do i = 0, Nxm1
+          if (gyf(j) > Lyc+Lyp) then
+            dbdt_int = dbdt_int + ((th(i, k, j, n)**2.d0 - th_mem(i, k, j, n)**2.d0) / dt) * (dyf(j) * dx(1) * dz(1))
+            gradb2_int = gradb2_int + (r1(i, k, j)**2.d0 &
+                                       +  r2(i, k, j)**2.d0 &
+                                       + (r3(i, k, j))**2.d0) * (dyf(j) * dx(1) * dz(1))
+          end if
+        end do
+      end do
+    end do
+
+    call mpi_allreduce(mpi_in_place, dbdt_int, 1, mpi_double_precision, &
+                     mpi_sum, mpi_comm_world, ierror)
+    call mpi_allreduce(mpi_in_place, gradb2_int, 1, mpi_double_precision, &
+                     mpi_sum, mpi_comm_world, ierror)
+
+    kappa_net = -0.5d0*dbdt_int/gradb2_int
+
+    fname = 'mean.h5'
+    write (gname,'("kappa", I0.1 "_net")') n
+    call WriteHDF5_real(fname, gname, kappa_net)
+
+
+    !!! Write pointwise diapycnal velocity !!!
+    ! e = dz/db * kappa * (grad^2 b)
+    ! Store in e_field. Store second derivatives in s1, s2, s3.
+
+    do j = 1, Nyp
+      do k = 0, twoNkz
+        do i = 0, Nxp - 1
+          cs1(i, k, j) = -kx2(i) * crth(i, k, j, n)
+          cs2(i, k, j) = (((crth(i, k, j + 1, n) - crth(i, k, j, n)) / dy(j+1)) - &
+                          ((crth(i, k, j, n) - crth(i, k, j - 1, n)) / dy(j))) / &
+                          dyf(j)
+          cs3(i, k, j) = -kz2(k) * crth(i, k, j, n)
+        end do
+      end do
+    end do
+   
+    ! Convert second derivatives to physical space
+    call fft_xz_to_physical(cs1, s1)
+    call fft_xz_to_physical(cs2, s2)
+    call fft_xz_to_physical(cs3, s3)
+
+    do j = 1, Nyp
+      !thsum(j) = 0.d0
+      !thcount(j) = 0.d0
+      do k = 0, Nzp - 1
+        do i = 0, Nxm1
+          s4(i, k, j) =  s1(i, k, j) + s2(i, k, j) + s3(i, k, j) ! grad^2 b
+
+          !! horizontal db/dz average within plume
+          !if (th(i, k, j, 2) > 0.d0) then 
+            !thsum(j) = thsum(j) + r2(i, k, j) 
+            !thcount(j) = thcount(j) + 1.d0
+          !end if
+        end do
+      end do
+    end do
+
+    !call mpi_allreduce(mpi_in_place, thsum, (Nyp + 2), &
+                       !mpi_double_precision, mpi_sum, mpi_comm_z, ierror)
+    !call mpi_allreduce(mpi_in_place, thcount, (Nyp + 2), &
+                       !mpi_double_precision, mpi_sum, mpi_comm_z, ierror)
+
+    !do j = 1, Nyp
+      !thsum(j) = thsum(j) / thcount(j) !thsum now contains horizontal plume average of db/dz
+    !end do
+  
+    do j = 1, Nyp
+      do k = 0, Nzp - 1
+        do i = 0, Nxm1
+          e_field(i, k, j) = s4(i, k, j) * (nu*Pr(n) + kappa_t(i, k, j, n)) / r2(i, k, j)
+        end do
+      end do
+    end do
+
+    if (movie) then
+      fname = 'movie.h5'
+      call mpi_barrier(mpi_comm_world, ierror)
+      if (rankZ == rankzmovie) then
+        do i = 0, Nxm1
+          do j = 1, Nyp
+            varxy(i, j) = e_field(i, NzMovie, j)
+          end do
+        end do
+        write (gname,'("diapycvel", I0.1 "_xz")') n
+        call WriteHDF5_XYplane(fname, gname, varxy)
+      end if
+      call mpi_barrier(mpi_comm_world, ierror)
+      if (rankY == rankymovie) then
+        do i = 0, Nxm1
+          do j = 0, Nzp - 1
+            varxz(i, j) = e_field(i, j, NyMovie)
+          end do
+        end do
+        write (gname,'("diapycvel", I0.1 "_xy")') n
+        call WriteHDF5_XZplane(fname, gname, varxz)
+      end if
+      call mpi_barrier(mpi_comm_world, ierror)
+      do i = 0, Nzp - 1
+        do j = 1, Nyp
+          varzy(i, j) = e_field(NxMovie, i, j)
+        end do
+      end do
+      write (gname,'("diapycvel", I0.1 "_yz")') n
+      call WriteHDF5_ZYplane(fname, gname, varzy)
+
+    end if
 
     !!! RMS TH !!!
     thvar_xy = 0.
@@ -358,11 +484,20 @@ subroutine save_stats_chan(movie,final)
       thsum(j) = 0.d0
       do k = 0, Nzp - 1
         do i = 0, Nxm1
-          r1(i, k, j) =  (r1(i, k, j) + dTHdX(n))**2.d0 &
-                       +  r2(i, k, j)**2.d0 &
-                       + (r3(i, k, j) + dTHdZ(n))**2.d0
-          vvar_xy(i, j) = vvar_xy(i, j) + r1(i, k, j)
-          thsum(j)    = thsum(j) + r1(i, k, j)
+          if ((gyf(j) > H).and.(n==1)) then
+            r1(i, k, j) =  (r1(i, k, j) + dTHdX(n))**2.d0 &
+                         !+  r2(i, k, j)**2.d0 &
+                         +  (r2(i, k, j) - N2)**2.d0 &
+                         + (r3(i, k, j) + dTHdZ(n))**2.d0
+            vvar_xy(i, j) = vvar_xy(i, j) + r1(i, k, j)
+            thsum(j)    = thsum(j) + r1(i, k, j)
+          else
+            r1(i, k, j) =  (r1(i, k, j) + dTHdX(n))**2.d0 &
+                         +  r2(i, k, j)**2.d0 &
+                         + (r3(i, k, j) + dTHdZ(n))**2.d0
+            vvar_xy(i, j) = vvar_xy(i, j) + r1(i, k, j)
+            thsum(j)    = thsum(j) + r1(i, k, j)
+           end if
         end do
       end do
     end do
@@ -372,12 +507,178 @@ subroutine save_stats_chan(movie,final)
     pe_diss(:, n) = thsum / float(Nx * Nz) ! NOT actually PE dissipation -- just (grad TH)^2
     vvar_xy = vvar_xy / float(Nz)
 
-    if (n == 1 .and. movie .and. Nz > 1) then
-      fname = 'mean_xz.h5'
-      gname = 'chi_xz'
-      call reduce_and_write_XYplane(fname, gname, vvar_xy, .false., movie)
+    ! Write pointwise chi
+    r1 = r1 * 2 * nu * Pr(1) / N2
+    if (movie) then
+  
+      fname = 'movie.h5'
+      call mpi_barrier(mpi_comm_world, ierror)
+      if (rankZ == rankzmovie) then
+        do i = 0, Nxm1
+          do j = 1, Nyp
+            varxy(i, j) = r1(i, NzMovie, j)
+          end do
+        end do
+        write (gname,'("chi", I0.1 "_xz")') n
+        call WriteHDF5_XYplane(fname, gname, varxy)
+      end if
+      call mpi_barrier(mpi_comm_world, ierror)
+      if (rankY == rankymovie) then
+        do i = 0, Nxm1
+          do j = 0, Nzp - 1
+            varxz(i, j) = r1(i, j, NyMovie)
+          end do
+        end do
+        write (gname,'("chi", I0.1 "_xy")') n
+        call WriteHDF5_XZplane(fname, gname, varxz)
+      end if
+      call mpi_barrier(mpi_comm_world, ierror)
+      do i = 0, Nzp - 1
+        do j = 1, Nyp
+          varzy(i, j) = r1(NxMovie, i, j)
+        end do
+      end do
+      write (gname,'("chi", I0.1 "_yz")') n
+      call WriteHDF5_ZYplane(fname, gname, varzy)
+
     end if
 
+    call mpi_barrier(mpi_comm_world, ierror)
+    
+    if (n == 1) then
+      e_field = s4
+
+      !!! CWP (2022) joint PDFs !!!
+      ! s4 contains e
+      ! r2 contains db/dz
+      ! s5 contains epsilon
+      ! s3 contains Ri
+
+      ! compute log Re_b, store in Re_b_field
+      ! compute LES corrected TKE, store in tke_field (which currently contains non-corrected TKE)
+      do j = 1, Nyp
+        do k = 0, Nzp - 1
+          do i = 0, Nxm1
+            chi_field(i, k, j) = log(r1(i, k, j))
+            tke_field(i, k, j) = (nu + nu_t(i, k, j)) * tke_field(i, k, j) / nu
+            Re_b_field(i, k, j) = log(tke_field(i, k, j) / ((nu + nu_t(i, k, j)) * abs(r2(i, k, j))))
+            
+            ! Now that LES-corrected TKE field has been computed, take log
+            tke_field(i, k, j) = log(tke_field(i, k, j))
+          end do
+        end do
+      end do
+
+      ! compute Ri, store in Ri_field. Store u and v gradients in s1, s2.
+      do j = 1, Nyp
+        do k = 0, Nzp - 1
+          do i = 0, Nxm1
+            s1(i, k, j) = (u1(i, k, j) - u1(i, k, j - 1)) / dy(j)
+            s2(i, k, j) = (u3(i, k, j) - u3(i, k, j - 1)) / dy(j)
+            Ri_field(i, k, j) = 2.d0 * r2(i, k, j) / (s1(i, k, j)**2.d0 + s2(i, k, j)**2.d0)
+          end do
+        end do
+      end do
+
+      if (movie) then
+        fname = 'movie.h5'
+        call mpi_barrier(mpi_comm_world, ierror)
+        if (rankZ == rankzmovie) then
+          do j = 1, Nyp
+            do i = 0, Nxm1
+              varxy(i, j) = Ri_field(i, NzMovie, j)
+            end do
+          end do
+          gname = 'Ri_xz'
+          call WriteHDF5_XYplane(fname, gname, varxy)
+        end if
+
+        if (rankY == rankymovie) then
+          do j = 0, Nzp - 1
+            do i = 0, Nxm1
+              varxz(i, j) = Ri_field(i, j, NyMovie)
+            end do
+          end do
+          gname = 'Ri_xy'
+          call WriteHDF5_XZplane(fname, gname, varxz)
+        end if
+
+        do j = 1, Nyp
+          do i = 0, Nzp - 1
+            varzy(i, j) = Ri_field(NxMovie, i, j)
+          end do
+        end do
+        gname = 'Ri_yz'
+        call WriteHDF5_ZYplane(fname, gname, varzy)
+      end if
+
+      if (movie) then
+        fname = 'movie.h5'
+        call mpi_barrier(mpi_comm_world, ierror)
+        if (rankZ == rankzmovie) then
+          do j = 1, Nyp
+            do i = 0, Nxm1
+              varxy(i, j) = tke_field(i, NzMovie, j)
+            end do
+          end do
+          gname = 'tke_xz'
+          call WriteHDF5_XYplane(fname, gname, varxy)
+        end if
+
+        if (rankY == rankymovie) then
+          do j = 0, Nzp - 1
+            do i = 0, Nxm1
+              varxz(i, j) = tke_field(i, j, NyMovie)
+            end do
+          end do
+          gname = 'tke_xy'
+          call WriteHDF5_XZplane(fname, gname, varxz)
+        end if
+
+        do j = 1, Nyp
+          do i = 0, Nzp - 1
+            varzy(i, j) = tke_field(NxMovie, i, j)
+          end do
+        end do
+        gname = 'tke_yz'
+        call WriteHDF5_ZYplane(fname, gname, varzy)
+      end if
+
+      if (movie) then
+        fname = 'movie.h5'
+        call mpi_barrier(mpi_comm_world, ierror)
+        if (rankZ == rankzmovie) then
+          do j = 1, Nyp
+            do i = 0, Nxm1
+              varxy(i, j) = Re_b_field(i, NzMovie, j)
+            end do
+          end do
+          gname = 'Re_b_xz'
+          call WriteHDF5_XYplane(fname, gname, varxy)
+        end if
+
+        if (rankY == rankymovie) then
+          do j = 0, Nzp - 1
+            do i = 0, Nxm1
+              varxz(i, j) = Re_b_field(i, j, NyMovie)
+            end do
+          end do
+          gname = 'Re_b_xy'
+          call WriteHDF5_XZplane(fname, gname, varxz)
+        end if
+
+        do j = 1, Nyp
+          do i = 0, Nzp - 1
+            varzy(i, j) = Re_b_field(NxMovie, i, j)
+          end do
+        end do
+        gname = 'Re_b_yz'
+        call WriteHDF5_ZYplane(fname, gname, varzy)
+      end if
+
+
+    end if
+  
 
     !gname = 'chi_zstar'
     !call Bin_Ystar_and_Write(gname, r1)
@@ -442,8 +743,9 @@ subroutine save_stats_chan(movie,final)
     end if
 
   end do ! Over passive scalars, n
-
-  !!! For plume calculations, want variables on GXF, GYF, GZF grid to reduce loss of domain at centreline
+  
+  !!! CWP 2022 azimuthal average calculations !!!
+  ! For plume calculations, want variables on GXF, GYF, GZF grid to reduce loss of domain at centreline
 
   ! Interpolate vertical velocity onto vertical fractional grid
   call g2gf(u2)
@@ -501,7 +803,7 @@ subroutine save_stats_chan(movie,final)
     end do
   end do
 
-  ! Compute azimuthal averages
+  !!! Compute azimuthal averages !!!
   gname = 'th_az'
   call compute_azavg(gname, s6)
 
@@ -553,14 +855,283 @@ subroutine save_stats_chan(movie,final)
   s1 = w_sfluc * b_sfluc
   call compute_azavg(gname, s1)
 
+  B_field = s1
+
   gname = 'bb_sfluc'
   s1 = b_sfluc * b_sfluc
   call compute_azavg(gname, s1)
 
+  ! Save cross-sections of B_field
+  if (movie) then
+    fname = 'movie.h5'
+    call mpi_barrier(mpi_comm_world, ierror)
+    if (rankZ == rankzmovie) then
+      do j = 1, Nyp
+        do i = 0, Nxm1
+          varxy(i, j) = B_field(i, NzMovie, j)
+        end do
+      end do
+      write (gname,'("B_xz")')
+      call WriteHDF5_XYplane(fname, gname, varxy)
+    end if
+
+    if (rankY == rankymovie) then
+      do j = 0, Nzp - 1
+        do i = 0, Nxm1
+          varxz(i, j) = B_field(i, j, NyMovie)
+        end do
+      end do
+      write (gname,'("B_xy")')
+      call WriteHDF5_XZplane(fname, gname, varxz)
+    end if
+
+    do j = 1, Nyp
+      do i = 0, Nzp - 1
+        varzy(i, j) = B_field(NxMovie, i, j)
+      end do
+    end do
+    write (gname,'("B_yz")')
+    call WriteHDF5_ZYplane(fname, gname, varzy)
+  end if
+
+  s1 = th(:,:,:,2)
+  s2 = th(:,:,:,1)
+
+  !!! CWP(2022) tracer-density weighted scatter plot based on Penney et al. (2020) !!!
+
+  gname = 'td_scatter'
+  call tracer_density_weighting(gname, s2, s1, 0.95d0 * H, LY, weights)
+
+  ! Write out scatter flux and corrected scatter
+  if (rank == 0) then
+    fname = 'movie.h5'
+    gname = 'td_flux'
+    call WriteHDF5_plane(fname, gname, weights_flux_cum) ! write cumulative flux (since last output) to file
+
+    weights_flux_mem = weights_flux_mem + weights_flux_cum ! compute cumulative flux since t = 0
+    weights_flux_cum = 0.d0
+
+    weights = weights - weights_flux_mem ! compute SVD
+    weights = weights / sum(weights_flux_mem)
+
+    gname = 'svd'
+    call WriteHDF5_plane(fname, gname, weights) ! write SVD
+
+  end if
+
+  ! Write out SVD bins
+  fname = 'mean.h5'
+  if ((write_bins_flag).and.(rankY == 0)) then
+
+    gname = 'SVD_phibins'
+    DiagPhi = phibins_out(1+rankZ * int(Nphi_out/NprocZ):(rankZ+1) * int(Nphi_out/NprocZ) )
+    call WriteStatH5_X(fname, gname, DiagPhi, int(Nphi_out/NprocZ))
+
+    gname = 'SVD_bbins'
+    DiagB = bbins_out(1+rankZ * int(Nb_out/NprocZ):(rankZ+1) * int(Nb_out/NprocZ) )
+    call WriteStatH5_X(fname, gname, DiagB, int(Nb_out/NprocZ))
+  end if
+
+  ! MPI barrier to ensure above weights calculation has been made. 'weights' constains SVD
+  call mpi_barrier(mpi_comm_world, ierror)
+  
+  ! Communicate SVD to all cores
+  call mpi_bcast(weights, Nb * Nphi, mpi_double_precision, 0, mpi_comm_world, ierror)
 
 
+  !!! CWP (2023) mixing metric PDFs based on SVD class
+  
+  ! Compute volumes to be used as weights
+  s3 = 0.d0
+  do j = jstart_th(1), jend_th(1)
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        s3(i, k, j) = dx(1) * dz(1) * dy(j)
+      end do
+    end do
+  end do
 
+  ! Identify SVD weight at each point
+  svd_field = -1.d9
+  s2 = -1.d9 ! just some number that will be excluded from PDF calculation...
+  s4 = -1.d9
+  s1 = -1.d9
 
+  do j = jstart_th(1), jend_th(1)
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        bbin = -1
+        phibin = -1
+
+        ! get b index
+        if (th(i, k, j, 1) <= b_min) then 
+          bbin = -1
+        else if (th(i, k, j, 1) > b_max) then 
+          bbin = -1
+        else
+          do l = 1, Nb ! b loop
+            if ((th(i, k, j, 1) - bbins(l) > -0.5d0*db).and. &
+                       (th(i, k, j, 1) - bbins(l) <= 0.5d0*db)) then
+              bbin = l
+            end if
+          end do
+        end if
+
+        ! get phi index
+        if (th(i, k, j, 2) <= phi_min) then 
+          phibin = -1
+        else if (th(i, k, j, 2) > phi_max) then
+          phibin = -1
+        else
+          do m = 1, Nphi !phi loop
+            if ((th(i, k, j, 2) - phibins(m) > -0.5d0*dphi).and.(th(i, k, j, 2) - phibins(m) <= 0.5d0*dphi)) then
+              phibin = m
+            end if
+          end do
+        end if
+        
+        if ((phibin > 0).and.(bbin > 0)) then
+          svd_field(i, k, j) = weights(bbin, phibin) ! for output
+          s2(i, k, j) = weights(bbin, phibin) ! for mixed
+          s4(i, k, j) = -weights(bbin, phibin) ! for plume
+          s1(i, k, j) = -abs(weights(bbin, phibin)) ! for mixing
+        end if
+      end do
+    end do
+  end do
+
+  ! Create PDF bins
+
+  do l = 1, 6
+
+    select case (l)
+    case (1)
+      gnamef = 'Ri'
+      pdf_min = Ri_min
+      pdf_max = Ri_max
+      pdf_field = Ri_field
+    case (2)
+      gnamef = 'Re_b'
+      pdf_min = Re_b_min
+      pdf_max = Re_b_max
+      pdf_field = Re_b_field
+    case (3)
+      gnamef = 'chi'
+      pdf_min = chi_min
+      pdf_max = chi_max
+      pdf_field = chi_field
+    case (4)
+      gnamef = 'tke'
+      pdf_min = tke_min
+      pdf_max = tke_max
+      pdf_field = tke_field
+    case (5)
+      gnamef = 'e'
+      pdf_min = e_min
+      pdf_max = e_max
+      pdf_field = e_field
+    case (6)
+      gnamef = 'B'
+      pdf_min = BW_min
+      pdf_max = BW_max
+      pdf_field = B_field
+
+    end select
+
+    dpdf = (pdf_max - pdf_min) / (nbins_pdf - 1)
+
+    do i = 0, nbins_pdf - 1
+      pdf_bins(i) = pdf_min + i * dpdf
+    end do
+
+    do i = nbins_pdf, nbins_pdf_out - 1
+      pdf_bins(i) = -1.d0
+    end do
+    
+    if ((write_bins_flag).and.(rankY == 0)) then
+      fname = 'mean.h5'
+      gname = trim(gnamef)//'_pdf_bins'
+      DiagPDF = pdf_bins(rankZ * int(nbins_pdf_out/NprocZ):(rankZ+1) * int(nbins_pdf_out/NprocZ) - 1)
+      call WriteStatH5_X(fname, gname, DiagPDF, int(nbins_pdf_out/NprocZ))
+    end if
+   
+    gname = trim(gnamef)//'_pdf_mixed'
+    call Compute_PDF_SVD_and_Write(gname, s3, pdf_field, pdf_bins, s2, svd_thresh, 0.95d0*H, LY)
+
+    gname = trim(gnamef)//'_pdf_plume'
+    call Compute_PDF_SVD_and_Write(gname, s3, pdf_field, pdf_bins, s4, svd_thresh, 0.95d0*H, LY)
+
+    gname = trim(gnamef)//'_pdf_mixing'
+    call Compute_PDF_SVD_and_Write(gname, s3, pdf_field, pdf_bins, s1, -svd_thresh, 0.95d0*H, LY)
+
+  end do 
+
+  gname = 'chi_e_pdf'
+  call Compute_JointPDF(gname, chi_field, chi_min, chi_max, nbins_pdf, e_field, e_min, e_max, nbins_pdf, &
+          s3, s1, -svd_thresh, 0.95d0*H, LY)
+
+  gname = 'chi_Ri_pdf'
+  call Compute_JointPDF(gname, chi_field, chi_min, chi_max, nbins_pdf, Ri_field, Ri_min, Ri_max, nbins_pdf, &
+          s3, s1, -svd_thresh, 0.95d0*H, LY)
+
+  gname = 'e_Ri_pdf'
+  call Compute_JointPDF(gname, e_field, e_min, e_max, nbins_pdf, Ri_field, Ri_min, Ri_max, nbins_pdf, &
+          s3, s1, -svd_thresh, 0.95d0*H, LY)
+
+  gname = 'chi_Reb_pdf'
+  call Compute_JointPDF(gname, chi_field, chi_min, chi_max, nbins_pdf, Re_b_field, Re_b_min, Re_b_max, nbins_pdf, &
+          s3, s1, -svd_thresh, 0.95d0*H, LY)
+
+  gname = 'Ri_Reb_pdf'
+  call Compute_JointPDF(gname, Ri_field, Ri_min, Ri_max, nbins_pdf, Re_b_field, Re_b_min, Re_b_max, nbins_pdf, &
+          s3, s1, -svd_thresh, 0.95d0*H, LY)
+
+  gname = 'Ri_B_pdf'
+  call Compute_JointPDF(gname, Ri_field, Ri_min, Ri_max, nbins_pdf, B_field, BW_min, BW_max, nbins_pdf, &
+          s3, s1, -svd_thresh, 0.95d0*H, LY)
+
+  gname = 'chi_B_pdf'
+  call Compute_JointPDF(gname, chi_field, chi_min, chi_max, nbins_pdf, B_field, BW_min, BW_max, nbins_pdf, &
+          s3, s1, -svd_thresh, 0.95d0*H, LY)
+
+  gname = 'e_B_pdf'
+  call Compute_JointPDF(gname, e_field, e_min, e_max, nbins_pdf, B_field, BW_min, BW_max, nbins_pdf, &
+          s3, s1, -svd_thresh, 0.95d0*H, LY)
+
+  !!! Compute tracer vs. buoyancy distribution !!!
+  
+  ! Compute bins
+
+  ! Find z values associated with above buoyancies, assuming linear density profile
+  zmin = H
+  zmax = H + b_max/N2
+  dz_max = maxval(dz)
+  nbins = floor((zmax - zmin)/dz_max)
+  
+  if ((rank == 0).and.(time == 0.d0)) write(*,*) "nbins", nbins
+  nbins_out = int(ceiling(real(nbins)/NprocZ) * NprocZ)
+  allocate(bins(0:nbins_out-1))
+
+  db_pdf = (b_max - b_min)/(nbins-1)
+
+  do i = 0, nbins - 1
+    bins(i) = b_min + i*db_pdf
+  end do
+  
+  do i = nbins, nbins_out - 1 ! Pad the useless part of the array with -1
+    bins(i) = -1.d0
+  end do
+
+  s1 = th(:,:,:,2)
+  s2 = th(:,:,:,1)
+
+  !!! CWP (2022) buoyancy binning !!!
+
+  gname = 'tb_source'
+  call Compute_PDF_and_Write(gname, s1, s2, bins, H-0.05d0, H)
+
+  gname = 'tb_strat'
+  call Compute_PDF_and_Write(gname, s1, s2, bins, H, LY)
 
   !!! Write Mean TH Stats f(y) !!!
   fname = 'mean.h5'
@@ -783,8 +1354,242 @@ subroutine save_stats_chan(movie,final)
   return
 end
 
+!----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+subroutine Compute_JointPDF(gname, X, Xmin, Xmax, NXbin, Y, Ymin, Ymax, NYbin, field, &
+                con_field, con_thresh, zstart, zstop)
+  !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+  ! Calculates joint PDF of (X, Y) using field as weights, conditioning on con_field > con_thresh, and normalise
+  ! CWP 2023
+
+  character(len=20) gname
+  real(rkind), pointer, intent(in) :: Y(:,:,:)
+  real(rkind), pointer, intent(in) :: X(:,:,:)
+  real(rkind), pointer, intent(in) :: field(:,:,:)
+  real(rkind), pointer, intent(in) :: con_field(:,:,:)
+  real(rkind) zstart, zstop, Xmin, Xmax, Ymin, Ymax, con_thresh
+  integer NXbin, NYbin
+
+  character(len=35) fname
+  integer i, j, k, l, m, Xbin, Ybin
+  real(rkind) Xbins(1:NXbin)
+  real(rkind) Ybins(1:NYbin)
+  real(rkind) dX, dY
+  real(rkind) pdf(1:size(Xbins),1:size(Ybins))
+  real(rkind) total_weight
+
+  ! Construct bins
+  dX = (Xmax - Xmin) / (NXbin - 1)
+
+  do i = 1, NXbin
+    Xbins(i) = Xmin + (i-1)*dX
+  end do
+
+  dY = (Ymax - Ymin) / (NYbin - 1)
+
+  do i = 1, NYbin
+    Ybins(i) = Ymin + (i-1)*dY
+  end do
 
 
+  pdf = 0.d0
+  total_weight = 0.d0
+
+  do j = jstart_th(1), jend_th(1)
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        if (((gyf(j) <= zstop).and.(gyf(j) >= zstart)).and.(con_field(i, k, j) > con_thresh)) then
+          Xbin = -1
+          Ybin = -1
+
+          do l = 1, NXbin-1
+            if ((X(i, k, j) >= Xbins(l)).and.(X(i, k, j) < Xbins(l+1))) then
+              Xbin = l
+            end if
+          end do
+
+          do m = 1, NYbin-1
+            if ((Y(i, k, j) >= Ybins(m)).and.(Y(i, k, j) < Ybins(m+1))) then
+              Ybin = m
+            end if
+          end do
+
+          if ((Xbin > 0).and.(Ybin > 0)) then
+            pdf(Xbin, Ybin) = pdf(Xbin, Ybin) + field(i, k, j)
+            total_weight = total_weight + field(i, k, j) * (Xbins(Xbin+1) - Xbins(Xbin)) * &
+                    (Ybins(Ybin+1) - Ybins(Ybin))
+          end if
+
+        end if
+      end do
+    end do
+  end do
+    
+  call mpi_allreduce(mpi_in_place, pdf, size(Xbins) * size(Ybins), mpi_double_precision, &
+                     mpi_sum, mpi_comm_world, ierror)
+  call mpi_allreduce(mpi_in_place, total_weight, 1, mpi_double_precision, &
+                     mpi_sum, mpi_comm_world, ierror)
+
+  if (total_weight > 0.d0) then !if total_weight = 0 then pdf = 0 also
+    pdf = pdf / total_weight
+  end if
+
+
+  fname = 'movie.h5'
+  if (rank == 0) then
+    call WriteHDF5_plane(fname, gname, pdf)
+  end if
+
+  gname = trim(gname)//'_w'
+  call WriteHDF5_real(fname, gname, total_weight)
+
+end
+
+!----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+subroutine tracer_density_weighting(gname, buoyancy, tracer, zstart, zstop, weights)
+  !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+  ! Calculates weights for (b, phi) scatter plot
+
+  real(rkind), pointer, intent(in) :: buoyancy(:,:,:)
+  real(rkind), pointer, intent(in) :: tracer(:,:,:)
+  real(rkind), pointer, intent(inout) :: weights(:,:)
+  real(rkind) zstart, zstop
+
+  character(len=35) fname
+  character(len=20) gname
+  integer i, j, k, l, m
+  integer bbin, phibin
+  
+  real(rkind) volume
+
+  volume = 0.d0
+  weights = 0.d0
+
+  do j = jstart_th(1), jend_th(1)
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        if ((gyf(j) <= zstop).and.(gyf(j) >= zstart)) then
+          bbin = -1
+          phibin = -1
+
+          ! get b index
+          if (buoyancy(i, k, j) <= b_min) then 
+            bbin = -1
+          else if (buoyancy(i, k, j) > b_max) then 
+            bbin = -1
+          else
+            do l = 1, Nb ! b loop
+              if ((buoyancy(i, k, j) - bbins(l) > -0.5d0*db).and. &
+                         (buoyancy(i, k, j) - bbins(l) <= 0.5d0*db)) then
+                bbin = l
+              end if
+            end do
+          end if
+
+          ! get phi index
+          if (tracer(i, k, j) <= phi_min) then 
+            phibin = -1
+          else if (tracer(i, k, j) > phi_max) then
+            phibin = -1
+          else
+            do m = 1, Nphi !phi loop
+              if ((tracer(i, k, j) - phibins(m) > -0.5d0*dphi).and.(tracer(i, k, j) - phibins(m) <= 0.5d0*dphi)) then
+                phibin = m
+              end if
+            end do
+          end if
+
+          if ((bbin > 0).and.(phibin > 0)) then
+            weights(bbin, phibin) = weights(bbin, phibin) + (dy(j) * dx(1) * dz(1))
+            volume = volume + (dy(j) * dx(1) * dz(1))
+          end if
+        end if
+      end do
+    end do
+  end do
+    
+  call mpi_allreduce(mpi_in_place, weights, Nb * Nphi, mpi_double_precision, &
+                     mpi_sum, mpi_comm_world, ierror)
+  call mpi_allreduce(mpi_in_place, volume, 1, mpi_double_precision, &
+                     mpi_sum, mpi_comm_world, ierror)
+
+  weights = weights! / volume
+
+
+  if (rank == 0) then
+    fname = 'movie.h5'
+    call WriteHDF5_plane(fname, gname, weights)
+  end if
+
+end
+
+!----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+subroutine tracer_density_flux(buoyancy, tracer, vvel, Nlayer, weights)
+  !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+  ! Calculates weights for (b, phi) scatter plot
+
+  real(rkind), pointer, intent(in) :: buoyancy(:,:,:)
+  real(rkind), pointer, intent(in) :: tracer(:,:,:)
+  real(rkind), pointer, intent(in) :: vvel(:,:,:)
+  real(rkind), pointer, intent(inout) :: weights(:,:)
+  real(rkind) zstart, zstop, volume
+
+  character(len=35) fname
+  character(len=20) gname
+  integer i, j, k, l, m, Nlayer
+  integer bbin, phibin
+  
+  volume = 0.d0
+  weights = 0.d0
+
+  if (rankY == rankymovie) then
+    j = Nlayer
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        bbin = -1
+        phibin = -1
+  
+        ! get b index
+        if (buoyancy(i, k, j) <= b_min) then 
+          bbin = -1
+        else if (buoyancy(i, k, j) > b_max) then 
+          bbin = -1
+        else
+          do l = 1, Nb ! b loop
+            if ((buoyancy(i, k, j) - bbins(l) > -0.5d0*db).and. &
+                       (buoyancy(i, k, j) - bbins(l) <= 0.5d0*db)) then
+              bbin = l
+            end if
+          end do
+        end if
+  
+        ! get phi index
+        if (tracer(i, k, j) <= phi_min) then 
+          phibin = -1
+        else if (tracer(i, k, j) > phi_max) then
+          phibin = -1
+        else
+          do m = 1, Nphi !phi loop
+            if ((tracer(i, k, j) - phibins(m) > -0.5d0*dphi).and.(tracer(i, k, j) - phibins(m) <= 0.5d0*dphi)) then
+              phibin = m
+            end if
+          end do
+        end if
+
+        if ((bbin > 0).and.(phibin>0)) then
+          weights(bbin, phibin) = weights(bbin, phibin) + (dy(j) * dx(1) * vvel(i, k, j) * dt)
+        end if
+        volume = volume + (dy(j) * dx(1) * dz(1))
+      end do
+    end do
+  end if
+
+  call mpi_allreduce(mpi_in_place, weights, Nb * Nphi, mpi_double_precision, &
+                     mpi_sum, mpi_comm_world, ierror)
+  call mpi_allreduce(mpi_in_place, volume, 1, mpi_double_precision, &
+                     mpi_sum, mpi_comm_world, ierror)
+
+  if (rank == 0) write(*,*) "flux volume", volume
+end
 
 
 !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
@@ -2103,9 +2908,130 @@ subroutine compute_BPE
 
 end
 
+!----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+subroutine Compute_PDF_SVD_and_Write(gname, field, ref_field, bins, con_field, con_thresh, zstart, zstop)
+  !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+  ! Compute PDF of ref_field using field as weights, conditioning on con_field > con_thresh ,and normalise
+  ! CWP 2023
 
+  character(len=20) gname
+  real(rkind), pointer, intent(in) :: field(:,:,:)
+  real(rkind), pointer, intent(in) :: ref_field(:,:,:)
+  real(rkind), pointer, intent(in) :: con_field(:,:,:)
+  real(rkind), intent(in) :: bins(:)
+  real(rkind) zstart, zstop, con_thresh
+  
+  character(len=35) fname
+  integer i, j, k, l, bin
+  real(rkind) field_binned(0:size(bins)-1)
+  real(rkind) total_weight
+  real(rkind) DiagX(0:int(size(field_binned)/NprocZ) - 1)
 
+  field_binned = 0.d0
+  total_weight = 0.d0
 
+  do j = jstart_th(1), jend_th(1)
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        if (((gyf(j) <= zstop).and.(gyf(j) >= zstart)).and.(con_field(i, k, j) > con_thresh)) then
+          ! Compute bin index
+          bin = -1
+          do l = 1, size(bins)-1
+            if ((ref_field(i, k, j) >= bins(l)) .and. (ref_field(i, k, j) < bins(l+1))) then
+              bin = l-1
+            end if
+          end do
+        
+          ! Add to binned field array
+          if (bin >= 0) then  ! if bin < 0 then something went awry...
+            field_binned(bin) = field_binned(bin) + field(i, k, j) 
+            total_weight = total_weight + field(i, k, j) * (bins(bin+2) - bins(bin+1))  ! bins is indexed from 1!
+          end if
+
+        end if 
+      end do
+    end do
+  end do
+
+  call mpi_allreduce(mpi_in_place, field_binned, size(bins), mpi_double_precision, &
+                     mpi_sum, mpi_comm_world, ierror)
+  call mpi_allreduce(mpi_in_place, total_weight, 1, mpi_double_precision, &
+                     mpi_sum, mpi_comm_world, ierror)
+
+  if (total_weight > 0.d0) then !if total_weight = 0 then field_binned = 0 too
+    field_binned = field_binned / total_weight 
+  end if
+
+  fname = 'mean.h5'
+  ! Write out the binned field to file
+  if (rankY == 0) then
+    DiagX = field_binned(rankZ * int(size(bins)/NprocZ):(rankZ+1) * int(size(bins)/NprocZ) - 1)
+    call WriteStatH5_X(fname, gname, DiagX, int(size(bins)/NprocZ))
+  end if
+
+  ! Write out total weight (for un-normalising)
+  gname = trim(gname)//'_w'
+  call WriteHDF5_real(fname, gname, total_weight)
+
+end
+
+!----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+subroutine Compute_PDF_and_Write(gname, field, ref_field, bins, zstart, zstop)
+  !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
+  ! Compute PDF of ref_field using field as weights, without normalisation
+  ! CWP 2022
+  character(len=20) gname
+  real(rkind), pointer, intent(in) :: field(:,:,:)
+  real(rkind), pointer, intent(in) :: ref_field(:,:,:)
+  real(rkind), intent(in) :: bins(:)
+  real(rkind) zstart, zstop
+  
+  character(len=35) fname
+  integer i, j, k, l, bin
+  real (rkind) field_binned(0:size(bins)-1)
+  real(rkind) DiagX(0:int(size(field_binned)/NprocZ) - 1)
+
+  field_binned = 0.d0
+
+  do j = jstart_th(1), jend_th(1)
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        if ((gyf(j) <= zstop).and.(gyf(j) >= zstart)) then
+          ! Compute bin index
+          bin = -1
+          do l = 1, size(bins)-1
+            if ((ref_field(i, k, j) > bins(l)) .and. (ref_field(i, k, j) <= bins(l+1))) then
+              bin = l-1
+            end if
+          end do
+        
+          ! Add to binned field array
+          if (bin >= 0) then  ! if bin < 0 then something went awry...
+            field_binned(bin) = field_binned(bin) + field(i, k, j) 
+          end if
+
+        end if 
+      end do
+    end do
+  end do
+
+  call mpi_allreduce(mpi_in_place, field_binned, size(bins), mpi_double_precision, &
+                     mpi_sum, mpi_comm_world, ierror)
+
+  fname = 'mean.h5'
+  ! Write out the binned field to file
+  if (rankY == 0) then
+    DiagX = field_binned(rankZ * int(size(bins)/NprocZ):(rankZ+1) * int(size(bins)/NprocZ) - 1)
+    call WriteStatH5_X(fname, gname, DiagX, int(size(bins)/NprocZ))
+
+    if (write_bins_flag) then
+      gname = trim(gname)//'_bins'
+      DiagX = bins(1+rankZ * int(size(bins)/NprocZ):(rankZ+1) * int(size(bins)/NprocZ) )
+      call WriteStatH5_X(fname, gname, DiagX, int(size(bins)/NprocZ))
+    end if
+  end if
+
+end
 
 !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 subroutine Bin_Ystar_and_Write(gname, field)
@@ -2386,6 +3312,9 @@ subroutine save_stats_LES_OOL(blank)
   logical blank
   real(rkind) :: Diag(1:Nyp)
 
+  ! Store/write 2D slices
+  real(rkind) varxy(0:Nxm1, 1:Nyp), varzy(0:Nzp - 1, 1:Nyp), varxz(0:Nxm1, 0:Nzp - 1)
+
 
   if (blank) then
     fname = 'mean.h5'
@@ -2401,8 +3330,27 @@ subroutine save_stats_LES_OOL(blank)
       Diag = 0.d0
       gname = 'kappa_sgs'
       call WriteStatH5_Y(fname, gname, Diag)
-
     end if
+
+    do n = 1, N_th
+      fname = 'movie.h5'
+      if (rankZ == rankzmovie) then
+        varxy = 0.d0
+        write (gname,'("kappa_t", I0.1 "_xz")') n
+        call WriteHDF5_XYplane(fname, gname, varxy)
+      end if
+
+      if (rankY == rankymovie) then
+        varxz = 0.d0
+        write (gname,'("kappa_t", I0.1 "_xy")') n
+        call WriteHDF5_XZplane(fname, gname, varxz)
+      end if
+    
+      varzy = 0.d0
+      write (gname,'("kappa_t", I0.1 "_yz")') n
+      call WriteHDF5_ZYplane(fname, gname, varzy)
+    end do
+
   else
     ! Needed to write out LES Statistics without timestepping...
     ! DON'T run this except for when stopping the simulation!

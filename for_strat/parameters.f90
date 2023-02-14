@@ -15,7 +15,7 @@ module parameters
   character(len=35)   flavor
   logical             use_LES
   real(rkind)         nu
-  real(rkind)         nu_v_scale
+  real(rkind)         nu_run
   real(rkind)         beta
   real(rkind)         delta_t, dt, delta_t_next_event, kick, ubulk0, px0
 
@@ -26,7 +26,7 @@ module parameters
   logical             variable_dt, first_time
   logical             reset_time
   real(rkind)         CFL
-  integer             update_dt
+  integer             update_dt, LES_start, LES_dt_end, time_nu_run
 
   real(rkind)         save_flow_dt, save_stats_dt
   real(rkind)         save_movie_dt
@@ -58,7 +58,6 @@ module parameters
   real(rkind) omega0, amp_omega0, force_start
   real(rkind) w_BC_Ymax_c1_transient
 
-
   ! Numerical parameters
   real(rkind)  h_bar(3), beta_bar(3), zeta_bar(3) ! For RK
   integer  time_ad_meth
@@ -74,10 +73,30 @@ module parameters
   ! Forcing parameters
   real (rkind) tau_sponge
 
-  ! Timestep memory
-  real(rkind) TIME_LAST
+  ! Scatter plot parameters
+  integer Nb, Nphi
+  integer Nb_out, Nphi_out
 
+  real(rkind) b_factor, phi_factor
+  real(rkind) phi_min, phi_max, b_min, b_max, db, dphi
 
+  real(rkind) source_vol, vol
+
+  real(rkind), allocatable :: bbins(:), phibins(:)
+  real(rkind), allocatable :: bbins_out(:), phibins_out(:)
+  real(rkind), pointer, contiguous, dimension(:,:) :: weights, weights_flux, weights_flux_cum, weights_flux_mem
+
+  ! HDF5 writing
+  real(rkind) DiagX(0:Nxp - 1)
+  character(len=35) fname
+  character(len=20) gname
+
+  ! Mixing PDFs
+  logical write_bins_flag
+  real(rkind) svd_thresh
+  integer nbins_pdf, nbins_pdf_out
+  real(rkind), allocatable :: pdf_bins(:)
+  real(rkind) chi_min, chi_max, Ri_min, Ri_max, Re_b_min, Re_b_max, e_min, e_max, BW_min, BW_max, tke_min, tke_max
 
 
 contains
@@ -98,7 +117,7 @@ contains
     !   (Note - if you change the following section of code, update the
     !    CURRENT_VERSION number to make obsolete previous input files !)
 
-    current_version = 3.6
+    current_version = 3.8
     read (11, *)
     read (11, *)
     read (11, *)
@@ -112,9 +131,9 @@ contains
     read (11, *) Re, beta, Lx, Lz, Ly
     nu = 1.d0 / Re
     read (11, *)
-    read (11, *) nu_v_scale
+    read (11, *) nu_run, time_nu_run
     read (11, *)
-    read (11, *) num_per_dir, create_new_flow
+    read (11, *) num_per_dir, create_new_flow, LES_start, LES_dt_end
     read (11, *)
     read (11, *) wall_time_limit, time_limit, delta_t, reset_time, &
       variable_dt, CFL, update_dt
@@ -130,7 +149,6 @@ contains
       read (11, *)
       read (11, *) Ri(n), Pr(n)
     end do
-
 
     ! Initialize MPI Variables
     call init_mpi
@@ -158,6 +176,8 @@ contains
       call input_chan
       call create_grid_chan
       call init_chan_mpi
+      write(*,*) "H", H
+      YcMovie = 0.95d0 * H
       if (save_movie_dt /= 0) then
         call init_chan_movie
       end if
@@ -172,7 +192,7 @@ contains
     test_rank = -1
     if ((Lyc+Lyp < gy(Nyp)) .and. (gy(0) < Lyc+Lyp)) then
       test_rank = rankY
-      write(*,*) test_rank
+      !write(*,*) test_rank
     end if
 
     if (rankY == test_rank) then
@@ -230,7 +250,7 @@ contains
     open (11, file='input_chan.dat', form='formatted', status='old')
     ! Read input file.
 
-    current_version = 3.6
+    current_version = 3.9
     read (11, *)
     read (11, *)
     read (11, *)
@@ -262,6 +282,10 @@ contains
     read (11, *)
     read (11, *) Svel_amp, Sb_amp, S_depth
     read (11, *)
+    read (11, *) Nb, Nphi, b_factor, phi_factor
+    read (11, *)
+    read (11, *) nbins_pdf, svd_thresh
+    read (11, *)
     read (11, *)
     read (11, *) u_BC_Ymin, u_BC_Ymin_c1
     read (11, *)
@@ -282,6 +306,20 @@ contains
       read (11, *)
       read (11, *) th_BC_Ymax(n), th_BC_Ymax_c1(n)
     end do
+    ! Read in boundaries for PDFs
+    read (11, *)
+    read (11, *) chi_min, chi_max
+    read (11, *)
+    read (11, *) Ri_min, Ri_max
+    read (11, *)
+    read (11, *) Re_b_min, Re_b_max
+    read (11, *)
+    read (11, *) e_min, e_max
+    read (11, *)
+    read (11, *) BW_min, BW_max
+    read (11, *)
+    read (11, *) tke_min, tke_max
+
 
     if (rank == 0) write (*, '("Ro Inverse = " ES26.18)') Ro_inv
     do n = 1, N_th
@@ -292,6 +330,55 @@ contains
     zvirt = -r0/(1.2d0 * alpha_e)
     F0 = (r0**2.d0) * b0
 
+    ! Set up scatter plot arrays
+    b_min = 0.d0
+    b_max = b_factor * N2 * (LY - H)
+    phi_min = 5.d-4
+    phi_max = phi_factor * 5.d0*F0 / (3.d0*alpha_e) * ((0.9d0 * alpha_e * F0)**(-1.d0/3.d0)) * &
+                              ((H + 5.d0*r0/(6.d0*alpha_e))**(-5.d0/3.d0))
+
+    db = (b_max - b_min) / Nb
+    dphi = (phi_max - phi_min) / Nphi
+
+    Nb_out = int(ceiling(real(Nb)/NprocZ) * NprocZ)
+    Nphi_out = int(ceiling(real(Nphi)/NprocZ) * NprocZ)
+   
+    allocate (bbins(1:Nb))
+    allocate (phibins(1:Nphi))
+    allocate (bbins_out(1:Nb_out))
+    allocate (phibins_out(1:Nphi_out))
+    allocate (weights(1:Nb, 1:Nphi))
+    allocate (weights_flux(1:Nb, 1:Nphi))
+    allocate (weights_flux_cum(1:Nb, 1:Nphi))
+    allocate (weights_flux_mem(1:Nb, 1:Nphi))
+
+    weights_flux_mem = 0.d0
+
+    do i = 1, Nb
+      bbins(i) = b_min + (i-0.5d0)*db
+      bbins_out(i) = b_min + (i-0.5d0)*db
+      if (rank == 0) write(*,*) "BBIN", i, bbins(i)
+    end do
+
+    do i = Nb + 1, Nb_out
+      bbins_out(i) = -1.d0
+    end do
+
+    do i = 1, Nphi
+      phibins(i) = phi_min + (i-0.5d0)*dphi
+      phibins_out(i) = phi_min + (i-0.5d0)*dphi
+      if (rank == 0) write(*,*) "PHIBIN", i, phibins(i)
+    end do
+
+    do i = Nphi + 1, Nphi_out
+      phibins_out(i) = -1.d0
+    end do
+
+    ! For PDF arrays
+    nbins_pdf_out = int(ceiling(real(nbins_pdf)/NprocZ) * NprocZ)
+
+    ! Create PDF bins
+    allocate(pdf_bins(0:nbins_pdf_out-1))
 
     ! Compensate no-slip BC in the GS flow direction due to dTHdx
     !   AND also define dTHdx & dTHdz

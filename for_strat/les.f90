@@ -1089,6 +1089,9 @@ end
 
   character(len=35) fname
 
+  ! Store/write 2D slices
+  real(rkind) varxy(0:Nxm1, 1:Nyp), varzy(0:Nzp - 1, 1:Nyp), varxz(0:Nxm1, 0:Nzp - 1)
+
   ! Array to store the velocity index for each component of the strain rate tensor
   integer U_index1(6)
   integer U_index2(6)
@@ -1391,6 +1394,39 @@ end
           end do
         end do
       end do
+
+      if (flag_save_LES .and. rk_step == 1) then
+        fname = 'movie.h5'
+        call mpi_barrier(mpi_comm_world, ierror)
+        if (rankZ == rankzmovie) then
+          do i = 0, Nxm1
+            do j = 1, Nyp
+              varxy(i, j) = kappa_t(i, NzMovie, j, n)
+            end do
+          end do
+          write (gname,'("kappa_t", I0.1 "_xz")') n
+          call WriteHDF5_XYplane(fname, gname, varxy)
+        end if
+        call mpi_barrier(mpi_comm_world, ierror)
+        if (rankY == rankymovie) then
+          do i = 0, Nxm1
+            do j = 0, Nzp - 1
+              varxz(i, j) = kappa_t(i, j, NyMovie, n)
+            end do
+          end do
+          write (gname,'("kappa_t", I0.1 "_xy")') n
+          call WriteHDF5_XZplane(fname, gname, varxz)
+        end if
+        call mpi_barrier(mpi_comm_world, ierror)
+        do i = 0, Nzp - 1
+          do j = 1, Nyp
+            varzy(i, j) = kappa_t(NxMovie, i, j, n)
+          end do
+          end do
+        write (gname,'("kappa_t", I0.1 "_yz")') n
+        call WriteHDF5_ZYplane(fname, gname, varzy)
+      end if
+
     end do
 
   end if
@@ -1427,6 +1463,7 @@ end
       call WriteStatH5_Y(fname, gname, Diag)
 
     end if
+
 
   end if
 

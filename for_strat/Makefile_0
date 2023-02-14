@@ -6,7 +6,7 @@ COMPILER = ifort
 # 	Skylake:	-xCORE-AVX512
 # 	KNL: 		-xMIC-AVX512
 #       Other:		-xHost
-TARGET_ARCH = -xMIC-AVX512
+TARGET_ARCH = -xCORE-AVX512
 
 # Libraries to Link
 LDFLAGS =
@@ -18,10 +18,9 @@ INCLUDES =
 FCFLAGS = -O3 -ipo # HPC
 #FCFLAGS = -O0 -g -check all -traceback -debug extended # Debug
 
-
 # --- # --- # --- # --- # --- # --- # --- # --- #
 
-LDFLAGS += -lfftw3 -mkl -lgfortran
+LDFLAGS += -lfftw3 -qmkl -lgfortran
 
 FCFLAGS += $(TARGET_ARCH) -DHDF5
 FCFLAGS += $(INCLUDES)
