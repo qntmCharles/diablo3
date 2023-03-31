@@ -78,8 +78,8 @@ md = get_metadata(run_dir, version)
 print("Complete metadata: ",md)
 
 tstart_idx = int(tstart // md['SAVE_STATS_DT'])
-z_upper = 0.9 * md['H']/md['r0'] # non-dim, scaled by r_0
-z_lower = 0.5 * md['H']/md['r0']
+z_upper = 0.92 * md['H']/md['r0'] # non-dim, scaled by r_0
+z_lower = 0.7 * md['H']/md['r0']
 
 ##### Get grid #####
 gxf, gyf, gzf, dz = get_grid(join(run_dir, 'grid.h5'), md)
@@ -544,37 +544,6 @@ if save: fig7.savefig(save_loc+'fig7.png', dpi=300)
 
 ##### ----------------------- #####
 
-# plot power law scalings for w_m, b_m
-fig1 = plt.figure(figsize=(12,6))
-if title: fig1.suptitle("Fig 1(d): numerical and analytic characteristic scales $w_m, b_m$")
-plt.loglog((gzf-z_virt)/r_0,b_m/b_m[plume_indices[0]], color='b', label="$b_m/b_{{m0}}$")
-plt.loglog((gzf-z_virt)/r_0,w_m/w_m[plume_indices[0]], color='r', label="$w_m/w_{{m0}}$")
-plt.legend()
-yrange = (0.1,2)
-xvals = [5,6,7,8,9,20,30,40,50,60,70,80,90]
-for val in xvals:
-    plt.loglog([val,val],yrange, color='grey',alpha=0.3, linestyle='dotted')
-plt.loglog([4,100], [1,1], color='grey', alpha=0.3)
-plt.loglog([10,10], yrange, color='grey', alpha=0.3)
-plt.ylim(*yrange)
-plt.xlim(4,100)
-plt.xlabel("$(z - z_0)/r_0$")
-
-F_0 = md['b0'] * r_0**2
-
-w_m_analytic = 5/6 * 1/alpha_p * np.power(9/10 * alpha_p * F_0/(theta_m_avg * beta_g_avg), 1/3) * \
-        np.power(gzf, -1/3)
-b_m_analytic = 5/6 * F_0/(alpha_p*theta_m_avg) * np.power(9/10 * alpha_p * F_0/(theta_m_avg * \
-        beta_g_avg), -1/3) * np.power(gzf, -5/3)
-
-plt.loglog(gzf[plume_indices]/r_0, b_m_analytic[plume_indices]/b_m[plume_indices[0]],
-        color='b',linestyle='dashed')
-plt.loglog(gzf[plume_indices]/r_0, w_m_analytic[plume_indices]/w_m[plume_indices[0]],
-        color='r',linestyle='dashed')
-
-plt.tight_layout()
-if save: fig1.savefig(save_loc+'fig1.png', dpi=300)
-
 ##### ----------------------- #####
 # estimate flux balance parameter
 # analytic alpha (entrainment coefficient)
@@ -703,8 +672,16 @@ axs23[0,1].set_xlim(0,2)
 axs23[0,1].set_xlabel("$r/r_m$")
 axs23[0,1].legend()
 
-axs23[1,1].axhline(-alpha_p, color='k', linestyle='dashed')
-axs23[1,1].text(0.05, 0.005-alpha_p, "-$\\alpha$", fontsize=14)
+entrainment = np.array([r_points * ubar[i]/(r_m[i] * w_m[i]) for i in plume_indices])
+rpoints_interp = np.array([r_points / r_m[i] for i in plume_indices])
+
+print(entrainment.shape)
+print(rpoints_interp.shape)
+f  = interpolate.interp1d(np.mean(rpoints_interp,axis=0), np.mean(entrainment, axis=0))
+print("ENTRAINMENT COEFF: ", f(2.0))
+
+axs23[1,1].axhline(f(2.0), color='k', linestyle='dashed')
+axs23[1,1].text(0.05, 0.005+f(2.0), "-$\\alpha$", fontsize=14)
 axs23[1,0].set_xlim(0, 2)
 axs23[1,0].set_xlabel("$r/r_m$")
 axs23[1,0].set_ylabel("$\\overline{u}/w_m$")
@@ -732,8 +709,9 @@ fig23.subplots_adjust(right=0.9)
 #fig23.colorbar(sm, cax=cbar_ax, label="$z/r_0$")
 #cbar = fig23.colorbar(sm, ax=axs23.ravel().tolist(), shrink=0.95, label="$z/r_0$")
 #fig23.colorbar(sm, cax = cax,label="$z/r_0$")
-fig23.savefig('/home/cwp29/Documents/papers/draft/figs/mvr.png', dpi=300)
-fig23.savefig('/home/cwp29/Documents/papers/draft/figs/mvr.pdf')
+
+#fig23.savefig('/home/cwp29/Documents/papers/draft/figs/mvr.png', dpi=300)
+#fig23.savefig('/home/cwp29/Documents/papers/draft/figs/mvr.pdf')
 if save: fig23.savefig(save_loc+'fig23.png', dpi=300)
 
 ##### ----------------------- #####
@@ -951,29 +929,6 @@ if save: fig10.savefig(save_loc+'fig10.png', dpi=300)
 
 ##### ----------------------- #####
 
-fig11 = plt.figure()
-if title: plt.title("Fig 9(f): relative contribution of turbulence and pressure")
-ticks = np.linspace(-0.2,0.2,3)
-plt.xticks(ticks)
-plt.xlim(-0.3, 0.3)
-plt.xlabel("$r/r_m$")
-plt.ylabel("$z/r_0$")
-plt.ylim(0, md['LZ']/r_0)
-plt.plot(beta_g[cont_valid_indices]-1, gzf[cont_valid_indices]/r_0, color='b',label="$\\beta_g-1$")
-plt.plot(((gamma_g-gamma_m)/gamma_m)[cont_valid_indices], gzf[cont_valid_indices]/r_0, color='red',
-        linestyle='dashed',label="$(\\gamma_g-\gamma_m)/\\gamma_m$")
-plt.plot(((delta_g-delta_m)/delta_m)[cont_valid_indices], gzf[cont_valid_indices]/r_0, color='orange',
-        label="$(\\delta_g-\delta_m)/\\delta_m$")
-plt.plot(((theta_g-theta_m)/theta_m)[cont_valid_indices], gzf[cont_valid_indices]/r_0, color='purple',
-        linestyle='-.',label="$(\\theta_g-\\theta_m)/\\theta_m$")
-plt.axhline(z_lower, color='grey', alpha=0.5, linestyle='--')
-plt.axhline(z_upper, color='grey', alpha=0.5, linestyle='--')
-plt.legend()
-plt.tight_layout()
-if save: fig11.savefig(save_loc+'fig11.png', dpi=300)
-
-##### ----------------------- #####
-
 fig12 = plt.figure()
 plt.plot(alpha_prod, gzf[cont_valid_indices]/r_0,color="b",label="$\\alpha_{prod}}$")
 plt.plot(alpha_Ri, gzf[cont_valid_indices]/r_0,color="red",linestyle="--",label="$\\alpha_\\mathrm{{Ri}}$")
@@ -998,101 +953,5 @@ plt.axvline(alpha_p, color='k', linestyle=':', label="$\\alpha_p$")
 plt.axvline(0.6*alpha_p, color='k', linestyle='-.', label="$\\alpha_j$")
 
 if save: fig12.savefig(save_loc+'fig12.png', dpi=300)
-
-##### ----------------------- #####
-
-fig6, ax6 = plt.subplots(1,2, figsize=(12,4))
-if title: fig6.suptitle("Fig 12: radial profiles of $\\nu_T$ and $D_T$ and radial mixing lengths")
-ax6[0].plot(r_regrid, nu_T, color='b', label="$\\nu_T/(w_m r_m)$")
-ax6[0].plot(r_regrid, D_T, linestyle='--', color='r', label="$D_T/(w_m r_m)$")
-ax6[0].set_ylim(0,0.1)
-ax6[0].set_xlim(0,1.5)
-ax6[0].set_xlabel("$r/r_m$")
-ax6[0].grid(color='grey', alpha=0.5)
-ax6[0].legend()
-
-ax6[1].plot(r_regrid, l_m, color='b', label="$l_m/r_m$")
-ax6[1].plot(r_regrid, l_mb, linestyle='--', color='r', label="$l_{mb}/r_m$")
-ax6[1].set_ylim(0,0.3)
-ax6[1].set_xlim(0,1.5)
-ax6[1].set_xlabel("$r/r_m$")
-ax6[1].legend()
-ax6[1].grid(color='grey', alpha=0.5)
-
-ticks = np.linspace(0, 1.5, 4)
-ax6[0].set_xticks(ticks)
-ax6[1].set_xticks(ticks)
-ticks = np.linspace(0, 0.1, 3)
-ax6[0].set_yticks(ticks)
-ticks = np.linspace(0, 0.3, 4)
-ax6[1].set_yticks(ticks)
-
-plt.tight_layout()
-if save: fig6.savefig(save_loc+'fig6.png', dpi=300)
-
-##### ----------------------- #####
-
-fig14 = plt.figure(constrained_layout=True, figsize=(10,8))
-ax14 = fig14.subplot_mosaic(
-        """
-        AA
-        BC
-        """,
-        gridspec_kw = {"hspace": 0.1, "wspace":0.1}
-        )
-
-ticks = np.linspace(0, 1.5, 4)
-yticks = np.linspace(0, 2, 5)
-yticks2 = np.linspace(0, 1.2, 7)
-
-ax14["A"].plot(r_regrid, Pr_T, color='b', label="Data")
-ax14["A"].plot(r_regrid, [aw2_an/ab2_an] * len(r_regrid), color='r', linestyle='--', label="Analytic")
-ax14["A"].set_xlim(0, 1.5)
-ax14["A"].set_xticks(ticks)
-ax14["A"].set_ylim(0, 1.2)
-ax14["A"].set_yticks(yticks2)
-ax14["A"].set_ylabel("$\\mathrm{Pr}_T$")
-ax14["A"].set_xlabel("$r/r_m$")
-
-ax14["B"].plot(r_regrid, fb_fw, color='b', label="Data")
-ax14["B"].plot(r_regrid, fbfw_an, color='r', linestyle='--', label="Analytic")
-ax14["B"].axhline(1, color='k', linestyle=':', alpha=0.5)
-ax14["B"].set_xlim(0, 1.5)
-ax14["B"].set_ylim(0, 2)
-ax14["B"].set_xticks(ticks)
-ax14["B"].set_yticks(yticks)
-ax14["B"].set_ylabel("$f'_b/f'_w$")
-ax14["B"].set_xlabel("$r/r_m$")
-
-ax14["C"].plot(r_regrid, fuw_fub, color='b', label="Data")
-ax14["C"].plot(r_regrid, fuwfub_an, color='r', linestyle='--', label="Analytic")
-ax14["C"].axhline(1, color='k', linestyle=':', alpha=0.5)
-ax14["C"].set_xlim(0, 1.5)
-ax14["C"].set_ylim(0, 2)
-ax14["C"].set_xticks(ticks)
-ax14["C"].set_yticks(yticks)
-ax14["C"].set_xlabel("$r/r_m$")
-ax14["C"].set_ylabel("$f_{uw}/f_{ub}$")
-
-if save: fig14.savefig(save_loc+'fig14.png', dpi=300)
-
-##### ----------------------- #####
-
-fig15 = plt.figure()
-plt.scatter(Gamma[plume_indices], alpha_cont, color='b', label="Data")
-gammas = np.linspace(0, 1.5, 50)
-plt.plot(gammas, 0.6*alpha_p + 0.4*alpha_p*gammas, linestyle='dashed', color='k', label="PB model")
-plt.xlim(0, 1.5)
-plt.ylim(0, 0.2)
-plt.xlabel("$\\Gamma$")
-plt.ylabel("$\\alpha$")
-ticks = np.linspace(0, 1.5, 4)
-plt.xticks(ticks)
-ticks = np.linspace(0, 0.2, 5)
-plt.yticks(ticks)
-
-plt.legend()
-plt.tight_layout()
-if save: fig15.savefig(save_loc+'fig15.png', dpi=300)
 
 if show: plt.show()

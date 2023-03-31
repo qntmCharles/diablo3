@@ -105,13 +105,13 @@ ax = pdf_fig.subplot_mosaic("ABC;DEF",
 summary_fig = plt.figure(constrained_layout=True, figsize=(12, 8))
 sum_ax = summary_fig.subplot_mosaic("GH;II")
 
-hist_bins = np.concatenate((np.linspace(np.nanmin(svd[step]), -md['Omega_thresh'], 10),
-    np.array([0, md['Omega_thresh']]),
+hist_bins = np.concatenate((np.linspace(np.nanmin(svd[step]), 0, 10),
+    np.array([md['Omega_thresh']]),
     np.linspace(md['Omega_thresh'], np.nanmax(svd[step]), 10)[1:]))
 N, bins, patches = sum_ax["I"].hist(svd.flatten(), bins = hist_bins,
         weights = bt_vd.flatten(), density=True)
 for b, p in zip(bins, patches):
-    if b < -md['Omega_thresh']:
+    if b < 0:
         p.set_facecolor('b')
     elif b < md['Omega_thresh']:
         p.set_facecolor('g')
@@ -124,16 +124,29 @@ norm=plt.Normalize(min(cvals),max(cvals))
 tuples = list(zip(map(norm,cvals), colors))
 cmap = matplotlib.colors.LinearSegmentedColormap.from_list("", tuples)
 
+"""
+svd_r = np.where(svd[step] > md['Omega_thresh'], svd[step], np.nan)
+svd_b = np.where(svd[step] < 0, svd[step], np.nan)
+svd_g = np.where(np.logical_and(svd[step] >= 0,
+    svd[step] <= md['Omega_thresh']), svd[step], np.nan)
+
+im_r = sum_ax["G"].pcolormesh(sx, sy, svd_r, cmap='Reds_r')
+im_r.set_clim(0, 2*np.nanmax(svd_r))
+im_b = sum_ax["G"].pcolormesh(sx, sy, svd_b, cmap='Blues')
+im_b.set_clim(2*np.nanmin(svd_b), 0)
+im_g = sum_ax["G"].pcolormesh(sx, sy, svd_g, cmap='Greens_r')
+im_g.set_clim(0, 2*np.nanmax(svd_g))
+"""
+
 svd[step] = np.where(svd[step] > md['Omega_thresh'], 1, svd[step])
-svd[step] = np.where(svd[step] < -md['Omega_thresh'], -1, svd[step])
-svd[step] = np.where(np.logical_and(svd[step] >= -md['Omega_thresh'], svd[step] <= md['Omega_thresh']), 0,
-        svd[step])
+svd[step] = np.where(svd[step] < 0, -1, svd[step])
+svd[step] = np.where(np.logical_and(svd[step] >= 0, svd[step] <= md['Omega_thresh']), 0, svd[step])
 sum_ax["G"].pcolormesh(sx, sy, svd[step], cmap=cmap)
 sum_ax["G"].set_aspect(bmax/phimax)
 
 test_array = np.where(test_array > md['Omega_thresh'], 1, test_array)
-test_array = np.where(test_array < -md['Omega_thresh'], -1, test_array)
-test_array = np.where(np.logical_and(test_array >= -md['Omega_thresh'], test_array <= md['Omega_thresh']), 0,
+test_array = np.where(test_array < 0, -1, test_array)
+test_array = np.where(np.logical_and(test_array >= 0, test_array <= md['Omega_thresh']), 0,
         test_array)
 
 #ax[1].pcolormesh(X, Y, test_array, cmap='coolwarm', norm=s_norm)
@@ -143,9 +156,8 @@ sum_ax["H"].set_xlim(0.2, 0.4)
 sum_ax["H"].set_ylim(0.95*md['H'], 1.5*md['H'])
 sum_ax["H"].set_aspect(1)
 
-fields = ["Ri", "chi", "Re_b", "tke", "e", "B"]
-labels = [r"$\mathrm{Ri}$", r"$\chi$", r"$\log \mathrm{Re}_b$", r"$\log \varepsilon$", r"Diapycnal flux $e$",
-        r"$B$"]
+fields = ["Ri", "chi", "Re_b", "tked", "N2"]
+labels = [r"$\mathrm{Ri}$", r"$\chi$", r"$\log \mathrm{Re}_b$", r"$\log \varepsilon$", r"local $N^2$"]
 
 for i, key, l in zip(range(len(fields)), ["A", "B", "C", "D", "E", "F"], labels):
     with h5py.File(join(save_dir, "mean.h5"), 'r') as f:
@@ -159,13 +171,18 @@ for i, key, l in zip(range(len(fields)), ["A", "B", "C", "D", "E", "F"], labels)
         pdf_plume = np.array([np.array(f[fields[i]+'_pdf_plume'][t]) for t in time_keys])
         pdf_mixed = np.array([np.array(f[fields[i]+'_pdf_mixed'][t]) for t in time_keys])
         pdf_mixing = np.array([np.array(f[fields[i]+'_pdf_mixing'][t]) for t in time_keys])
+        pdf_total = np.array([np.array(f[fields[i]+'_pdf_total'][t]) for t in time_keys])
         print(pdf_plume.shape)
 
         pdf_bins = np.array(f[fields[i]+'_pdf_bins'][time_keys[0]])
 
         pdf_mixed_w = np.array([float(f[fields[i]+'_pdf_mixed_w'][t][0]) for t in time_keys])
-        pdf_mixing_w = np.array([float(f[fields[i]+'_pdf_mixing_w'][t][0]) for t in time_keys])
+        if fields[i] == "tke_diss":
+            pdf_mixing_w = np.array([float(f[fields[i]+'_pdf_mixing_'][t][0]) for t in time_keys])
+        else:
+            pdf_mixing_w = np.array([float(f[fields[i]+'_pdf_mixing_w'][t][0]) for t in time_keys])
         pdf_plume_w = np.array([float(f[fields[i]+'_pdf_plume_w'][t][0]) for t in time_keys])
+        pdf_total_w = np.array([float(f[fields[i]+'_pdf_total_w'][t][0]) for t in time_keys])
         print(pdf_plume_w)
 
         total_weight = pdf_mixed_w + pdf_mixing_w + pdf_plume_w
@@ -181,6 +198,8 @@ for i, key, l in zip(range(len(fields)), ["A", "B", "C", "D", "E", "F"], labels)
                 label="{0:.4f}".format(pdf_mixed_w[step]/total_weight[step]))
         ax[key].plot(pdf_plot, pdf_plume[step,:-1], color='b',
                 label="{0:.4f}".format(pdf_plume_w[step]/total_weight[step]))
+        ax[key].plot(pdf_plot, pdf_total[step,:-1], color='k', linestyle='--', alpha=0.7,
+                label="{0:.4f}".format(pdf_total_w[step]/total_weight[step]))
     else:
         ax[key].plot(pdf_plot, pdf_mixing_w[step]*pdf_mixing[step,:-1], color='g',
                 label="{0:.4f}".format(pdf_mixing_w[step]/total_weight[step]))
@@ -188,6 +207,8 @@ for i, key, l in zip(range(len(fields)), ["A", "B", "C", "D", "E", "F"], labels)
                 label="{0:.4f}".format(pdf_mixed_w[step]/total_weight[step]))
         ax[key].plot(pdf_plot, pdf_plume_w[step]*pdf_plume[step,:-1], color='b',
                 label="{0:.4f}".format(pdf_plume_w[step]/total_weight[step]))
+        ax[key].plot(pdf_plot, pdf_total_w[step]*pdf_total[step,:-1], color='k', linestyle='--', alpha=0.7,
+                label="{0:.4f}".format(pdf_total_w[step]/total_weight[step]))
 
     if fields[i] == "Ri" or fields[i] == "e":
         ax[key].axvline(0, color='gray', linestyle='--', alpha=0.7)
@@ -208,11 +229,11 @@ sum_ax["G"].set_ylabel("tracer conc.")
 sum_ax["G"].set_title(r"Segregated volume distribution $\hat{\Omega}$")
 
 mixing_line = mpatches.Patch(facecolor='g', edgecolor='g',
-        label=r"$\left|\hat{{\Omega}}\right| < {0}$".format(md['Omega_thresh']))
+        label=r"$0 < \hat{{\Omega}} < {0}$".format(md['Omega_thresh']))
 mixed_line = mpatches.Patch(facecolor='r', edgecolor='r',
-        label=r"$\hat{{\Omega}} > {0}$".format(md['Omega_thresh']))
+        label=r"$\hat{{\Omega}} \geq {0}$".format(md['Omega_thresh']))
 plume_line = mpatches.Patch(facecolor='b', edgecolor='b',
-        label=r"$\hat{{\Omega}} < -{0}$".format(md['Omega_thresh']))
+        label=r"$\hat{{\Omega}} \leq 0$")
 sum_ax["G"].legend(handles=[mixing_line, mixed_line, plume_line])
 
 sum_ax["I"].set_xlabel(r"$\hat{\Omega}$")

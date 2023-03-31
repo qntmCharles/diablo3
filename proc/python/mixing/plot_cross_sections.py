@@ -43,10 +43,8 @@ with h5py.File(join(save_dir,"movie.h5"), 'r') as f:
 
     Re_b = np.array([np.array(f['Re_b_xz'][t]) for t in time_keys])
     Ri = np.array([np.array(f['Ri_xz'][t]) for t in time_keys])
-    eps = np.array([np.array(f['tke_xz'][t]) for t in time_keys])
-    e = np.array([np.array(f['diapycvel1_xz'][t]) for t in time_keys])
+    eps = np.array([np.array(f['tked_xz'][t]) for t in time_keys])
     chi = np.array([np.array(f['chi1_xz'][t]) for t in time_keys])
-    B = np.array([np.array(f['B_xz'][t]) for t in time_keys])
     nu_t = np.array([np.array(f['nu_t_xz'][t]) for t in time_keys])
     b = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
     t = np.array([np.array(f['th2_xz'][t]) for t in time_keys])
@@ -71,23 +69,11 @@ with h5py.File(join(save_dir,"movie.h5"), 'r') as f:
     times = np.array([f['th1_xz'][t].attrs['Time'] for t in time_keys])
     f.close()
 
-# Get az data
-with h5py.File(join(save_dir,"az_stats.h5"), 'r') as f:
-    print("Keys: %s" % f.keys())
-    time_keys = list(f['u_az'].keys())
-    wbar = np.array([np.array(f['w_az'][t]) for t in time_keys])
-    bbar = np.array([np.array(f['b_az'][t]) for t in time_keys])
-
-wbar2 = np.concatenate((np.flip(wbar,axis=2), wbar), axis=2)
-wfluc = w-wbar2
-
-bbar2 = np.concatenate((np.flip(bbar,axis=2), bbar), axis=2)
-bfluc = b-bbar2
-
 _,z_coords,_ = np.meshgrid(times, gzf, gxf, indexing='ij', sparse=True)
 
 trac = t
 b_env = b[0]
+B = (b - b_env) * w
 
 plot_max = 0.15 + md['H']
 plot_min = 0.9 * md['H']
@@ -108,15 +94,18 @@ N2 = np.gradient(b, gzf, axis=1)
 
 # Restrict to penetration region
 chi = chi[:, idx_min:idx_max, :]
+B = B[:, idx_min:idx_max, :]
 Re_b = Re_b[:, idx_min:idx_max, :]
 eps = eps[:, idx_min:idx_max, :]
-e = e[:, idx_min:idx_max, :]
 nu_t = nu_t[:, idx_min:idx_max, :]
 b = b[:, idx_minf:idx_maxf, :]
 t = t[:, idx_minf:idx_maxf, :]
 Ri = Ri[:, idx_min:idx_max, :]
-B = B[:, idx_min:idx_max, :]
 trac = trac[:, idx_min:idx_max, :]
+
+gamma = chi / (chi + np.exp(eps))
+
+chi = np.log(chi)
 
 print("Total time steps: %s"%NSAMP)
 print("Dimensional times: ",times)
@@ -127,7 +116,7 @@ contour_lvls_t = [1e-3]
 
 """ ----------------------------------------------------------------------------------------------------- """
 
-step = 30
+step = NSAMP-1
 if step >= NSAMP:
     step = int(input("Chosen timestep out of simulation range. Pick again: "))
 
@@ -153,7 +142,7 @@ eps_contour_t = ax[0,0].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='
 eps_divider = make_axes_locatable(ax[0,0])
 eps_cax = eps_divider.append_axes("right", size="5%", pad=0.05)
 eps_cb = plt.colorbar(eps_im, cax=eps_cax)
-eps_im.set_clim(-12, -6)
+eps_im.set_clim(-20, -5)
 
 ax[0,0].set_title("(a) TKE dissipation rate $\\varepsilon$ (log scale)")
 
@@ -187,34 +176,34 @@ chi_contour_t = ax[1,0].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='
 chi_divider = make_axes_locatable(ax[1,0])
 chi_cax = chi_divider.append_axes("right", size="5%", pad=0.05)
 chi_cb = plt.colorbar(chi_im, cax=chi_cax)
-chi_max = 0.2*np.max(chi[-1])
-chi_im.set_clim(0, chi_max)
+#chi_max = 0.2*np.max(chi[-1])
+#chi_im.set_clim(0, chi_max)
 
 ax[1,0].set_title("(d) Thermal variance dissipation rate $\\chi$")
 
-e_im = ax[1,1].pcolormesh(X, Y, e[step], cmap='bwr')
-e_contour_b = ax[1,1].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='grey', alpha=0.5)
-e_contour_t = ax[1,1].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
+gamma_im = ax[1,1].pcolormesh(X, Y, gamma[step], cmap='hot_r')
+gamma_contour_b = ax[1,1].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='grey', alpha=0.5)
+gamma_contour_t = ax[1,1].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
 
-e_divider = make_axes_locatable(ax[1,1])
-e_cax = e_divider.append_axes("right", size="5%", pad=0.05)
-e_cb = plt.colorbar(e_im, cax=e_cax)
-e_max = 1e-2*np.max(np.abs(e[step]))
-e_im.set_clim(-e_max, e_max)
+gamma_divider = make_axes_locatable(ax[1,1])
+gamma_cax = gamma_divider.append_axes("right", size="5%", pad=0.05)
+gamma_cb = plt.colorbar(gamma_im, cax=gamma_cax)
+#gamma_max = 1e-2*np.max(np.abs(e[step]))
+#gamma_im.set_clim(-gamma_max, gamma_max)
 
-ax[1,1].set_title("(e) Diapycnal flux $e$")
+ax[1,1].set_title("(e) Mixing efficiency $\\Gamma$")
 
-B_im = ax[1,2].pcolormesh(X, Y, B[step], cmap='bwr')
+B_im = ax[1,2].pcolormesh(X, Y, B[step], cmap='coolwarm')
 B_contour_b = ax[1,2].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='grey', alpha=0.5)
 B_contour_t = ax[1,2].contour(Xf, Yf, t[step], levels=contour_lvls_t, colors='green', linestyles='--')
 
 B_divider = make_axes_locatable(ax[1,2])
 B_cax = B_divider.append_axes("right", size="5%", pad=0.05)
 B_cb = plt.colorbar(B_im, cax=B_cax)
-B_max = 0.6*np.max(np.abs(B[step]))
-B_im.set_clim(-B_max, B_max)
+#B_max = 1e-2*np.max(np.abs(e[step]))
+#B_im.set_clim(-B_max, B_max)
 
-ax[1,2].set_title("(f) Vertical turbulent density flux $B$")
+ax[1,2].set_title("(e) Buoyancy flux $J_b$")
 
 """ ----------------------------------------------------------------------------------------------------- """
 now = datetime.now()

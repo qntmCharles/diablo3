@@ -47,7 +47,7 @@ def get_metadata(run_dir, version):
         chan_params = ["r0", "alpha_e", "b0", "Lyc", "Lyp", "S_depth", "N2", "H",
                 "Q0","b_factor", "phi_factor", "Nb", "Nphi","F_TYPE", "Omega_thresh"]
         params = ["LX", "LY", "LZ", "RE", "SAVE_MOVIE_DT", "SAVE_STATS_DT",
-                "LES_DT_END", "NU_START", "NU_RUN", "SAVE_FLOW_DT", "VERSION"]
+                "LES_DT_END", "NU_START", "NU_RUN", "SAVE_FLOW_DT", "VERSION", "NU_START_TIME"]
 
     for params_file, parameters in zip(["/input.dat", "/input_chan.dat"],[params,chan_params]):
         with open(run_dir+params_file, 'r') as f:
@@ -67,13 +67,13 @@ def get_metadata(run_dir, version):
                         param_col = words.index(name)-len(words)
 
             if param_line > 0:
-                if name in ["NU_RUN", "Omega_thresh"]:
+                if name in ["NU_START", "NU_RUN", "Omega_thresh", "RE"]:
                     reader = ff.FortranRecordReader('ES12.5')
                     md[name] = reader.read(lines[param_line+1].split()[param_col])[0]
                 else:
                     md[name] = float(lines[param_line+1].split()[param_col])
-                    if name == "RE":
-                        md['nu'] = 1/md["RE"]
+                if name == "RE":
+                    md['nu'] = 1/md["RE"]
 
 
     with open(run_dir+"/grid_def.all",'r') as f:
@@ -299,7 +299,7 @@ def g2gf_1d(md, var):
 
     return var_irft
 
-def compute_F0(f, md, tstart_ind = 0, verbose=True, tracer=False):
+def compute_F0(f, md, tstart_ind = 0, verbose=True, tracer=False, zbot=0.5, ztop=1.0, plot=False):
     dr = md['LX']/md['Nx']
     nbins = int(md['Nx']/2)
     r_bins = np.array([r*dr for r in range(0, nbins+1)])
@@ -317,7 +317,13 @@ def compute_F0(f, md, tstart_ind = 0, verbose=True, tracer=False):
 
     _, _, gzf, _ = get_grid(join(f,'grid.h5'), md)
 
-    z_bottom = get_index(md['Lyc'] + md['Lyp'], gzf)
-    z_top = get_index(0.9*md['H'], gzf)
+    z_bottom = get_index(zbot*md['H'], gzf)
+    z_top = get_index(ztop*md['H'], gzf)
+
+    if plot:
+        plt.plot(F0_int, gzf)
+        plt.axhline(zbot*md['H'], linestyle='--', color='gray')
+        plt.axhline(ztop*md['H'], linestyle='--', color='gray')
+        plt.show()
 
     return np.mean(F0_int[z_bottom:z_top])

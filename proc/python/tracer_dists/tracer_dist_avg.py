@@ -13,7 +13,6 @@ from mpl_toolkits.axes_grid1 import make_axes_locatable
 from os.path import join, isfile
 from os import listdir
 from functions import get_metadata, read_params, get_grid, g2gf_1d
-from mpl_toolkits.axes_grid.inset_locator import (inset_axes, InsetPosition, mark_inset)
 
 def get_index(z, griddata):
     return int(np.argmin(np.abs(griddata - z)))
@@ -220,5 +219,5 @@ ax1.legend(loc='upper left', bbox_to_anchor=(0.05, 0.98))
 
 #plt.tight_layout()
 #plt.savefig('/home/cwp29/Documents/posters/issf2/tb_dist_gray.png', dpi=200)
-plt.savefig('/home/cwp29/Documents/essay/figs/tb_dist.png', dpi=200)
+#plt.savefig('/home/cwp29/Documents/essay/figs/tb_dist.png', dpi=200)
 plt.show()
