@@ -140,7 +140,7 @@ print(zmaxs)
 print("Setting up data arrays...")
 fig, axs = plt.subplots(1,2, figsize=(12, 3), height_ratios=[1], constrained_layout=True)
 
-contours_b = np.linspace(0, 0.1/B, 11)
+contours_b = np.linspace(0, md['N2']*9*L/B, 16)
 contour_lvls_trace = np.linspace(0.01, 0.1, 8)
 
 print("Setting up initial plot...")
@@ -214,7 +214,7 @@ axs[1].set_ylim(-0.6, 5.5)
 
 axs[1].set_xlabel("$x$")
 
-plt.savefig('/home/cwp29/Documents/papers/draft/figs/pvd_evol.pdf')
+#plt.savefig('/home/cwp29/Documents/papers/draft/figs/pvd_evol.pdf')
 plt.savefig('/home/cwp29/Documents/papers/draft/figs/pvd_evol.png', dpi=300)
 
 plt.show()

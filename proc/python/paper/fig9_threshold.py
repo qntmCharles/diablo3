@@ -90,14 +90,17 @@ bins_plot = 0.5 * (svd_bins[1:] + svd_bins[:-1])
 
 
 results = np.zeros(shape=(NSAMP, len(svd_bins)))
+results2 = np.zeros(shape=(NSAMP, len(svd_bins)))
 
 for i in range(1,NSAMP):
     for j in range(1, len(svd_bins)):
         results[i, j] = np.nansum(
             np.where(np.logical_and(svd[i] <= svd_bins[j], svd[i] > 0), vd[i], 0))
+        results2[i, j] = np.nansum(
+                np.where(svd[i] > svd_bins[j], vd[i], 0))
 
 dOmegaInt_dt = np.gradient(results, times, axis=0)
-#dOmegaInt_dt = np.gradient(results, svd_bins, axis=1)
+comp_dOmegaInt_dt = np.gradient(results2, times, axis=0)
 
 
 print("Done getting data.")
@@ -140,4 +143,21 @@ ax.set_ylabel(r"$\frac{\mathrm{d}I_{\hat{\Omega}^*}}{\mathrm{d}t}$", rotation=0)
 plt.tight_layout()
 #plt.savefig('/home/cwp29/Documents/papers/draft/figs/threshold.png', dpi=300)
 #plt.savefig('/home/cwp29/Documents/papers/draft/figs/threshold.pdf')
+
+fig = plt.figure(figsize=(8, 2.5))
+ax = plt.gca()
+
+N = 6
+col = plt.cm.viridis(np.linspace(0, 1, N))
+
+mean_results2 = ndimage.uniform_filter1d(results2, axis=0, size=5, mode='nearest')
+mean_dOmegaInt_dt2 = np.gradient(mean_results2, times, axis=0)
+for step, c in zip(range(-N//2, N//2 + 1), col):
+    if step != 0:
+        ax.plot(svd_bins, mean_dOmegaInt_dt2[sim_step+step], color=c, alpha=0.5,
+                label=r"$t = {0:.2f}$".format(times[sim_step+step]))
+    else:
+        ax.plot(svd_bins, mean_dOmegaInt_dt2[sim_step], color='b',
+                label=r"$t = {0:.2f}$".format(times[sim_step+step]))
+
 plt.show()

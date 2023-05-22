@@ -31,8 +31,6 @@ def compute_pdf(data, ref, bins, normalised=False):
 
 ##### USER-DEFINED PARAMETERS #####
 params_file = "params.dat"
-#out_file = "out.002241.h5"
-out_file = "end.h5"
 
 save = False
 
@@ -49,8 +47,6 @@ print("Complete metadata: ",md)
 
 # Calculate turnover time
 F = md['b0'] * (md['r0']**2)
-tau = md['r0']**(4/3) * F**(-1/3)
-print("Non-dimensional turnover time: {0:.04f}".format(tau))
 
 ##### Get grid #####
 gxf, gyf, gzf, dzf = get_grid(join(run_dir, 'grid.h5'), md)

@@ -110,7 +110,7 @@ sx, sy = np.meshgrid(bbins, phibins)
 print("Total time steps: %s"%NSAMP)
 print("Dimensional times: ",times)
 
-step = 58
+step = 56
 
 th1_xz = np.where(th1_xz < 1e-3/B, 0, th1_xz)
 
@@ -136,7 +136,7 @@ print(zmaxs)
 print("Setting up data arrays...")
 fig, axs = plt.subplots(1,2, figsize=(12, 3), height_ratios=[1], constrained_layout=True)
 
-contours_b = np.linspace(0, 0.1/B, 11)
+contours_b = np.linspace(0, md['N2']*9*L/B, 16)
 contour_lvls_trace = np.linspace(0.01, 0.1, 8)
 
 print("Setting up initial plot...")
@@ -179,31 +179,34 @@ print(np.nanmean(diff))
 diff = ((vd[step] - vd_flux[step])/np.nansum(vd_flux[step]))
 diff = np.where(diff == 0, np.nan, diff)
 
-#diff = np.where(diff > Omega_thresh, 1, diff)
-#diff = np.where(diff < 0, -1, diff)
-#diff = np.where(np.logical_and(diff >= 0, diff <= Omega_thresh), 0, diff)
 im_scatter = axs[0].pcolormesh(sx, sy, diff, cmap=custom_cmap, norm=norm)
         #norm=colors.CenteredNorm(halfrange = 0.05*np.nanmax(np.abs(pvd))))
 
 plot_array = np.copy(plot_plume[step])
-#plot_array = np.where(th2_xz >= tracer_thresh, plot_array, np.NaN)
 for i in range(int(md['Nb'])):
     for j in range(int(md['Nphi'])):
         plot_array[np.logical_and(np.logical_and(plot_plume_b[step] > bbins[i] - db/2,
         plot_plume_b[step] <= bbins[i] + db/2),np.logical_and(plot_plume[step] > phibins[j] - dphi/2,
         plot_plume[step] <= phibins[j] + dphi/2))] = diff[j,i]
-
-#plot_array = np.where(plot_array > Omega_thresh, 1, plot_array)
-#plot_array = np.where(plot_array < 0, -1, plot_array)
-#plot_array = np.where(np.logical_and(plot_array >= 0, plot_array <= Omega_thresh), 0, plot_array)
-
 im_t = axs[1].pcolormesh(X,Y,plot_array, cmap=custom_cmap, norm=norm)
         #norm=colors.CenteredNorm(halfrange = 0.05*np.nanmax(np.abs(pvd))))
 
-#cb_vd = plt.colorbar(im_scatter, ax = axs[0], label=r"$\hat{\Omega}$")
-#cb_waves = fig.colorbar(im_b, ax = axs[1], location='right', shrink=0.7,
-    #label="buoyancy")
-#cb_plume = fig.colorbar(im_t, ax = axs[1], location='right', shrink=0.7, label=r"$\hat{\Omega}$")
+# add CoM triangles
+
+com_thresh = Omega_thresh
+b_com = np.nansum(sx * np.where(diff > com_thresh, diff, 0)) / np.nansum(np.where(diff > com_thresh, diff, 0))
+phi_com = np.nansum(sy * np.where(diff > com_thresh, diff, 0)) / np.nansum(np.where(diff > com_thresh, diff, 0))
+#axs[0].scatter(b_com, phi_com, color='red', edgecolor='white', marker='^', s=100)
+
+#b_com = np.nansum(sx * np.where(np.logical_and(diff > 0, diff <= Omega_thresh), diff, 0)) / \
+        #np.nansum(np.where(np.logical_and(diff > 0, diff <= Omega_thresh), diff, 0))
+#phi_com = np.nansum(sy * np.where(np.logical_and(diff > 0, diff <= Omega_thresh), diff, 0)) / \
+        #np.nansum(np.where(np.logical_and(diff > 0, diff <= Omega_thresh), diff, 0))
+#axs[0].scatter(b_com, phi_com, color='green', edgecolor='white', marker='^', s=100)
+
+b_com = np.nansum(sx * np.where(diff <= 0, diff, 0)) / np.nansum(np.where(diff <= 0, diff, 0))
+phi_com = np.nansum(sy * np.where(diff <= 0, diff, 0)) / np.nansum(np.where(diff <= 0, diff, 0))
+#axs[0].scatter(b_com, phi_com, color='blue', edgecolor='white', marker='^', s=100)
 
 cax_pvd = axs[0].inset_axes([1.05, 0.1, 0.05, 0.8])
 fig.colorbar(im_scatter, ax=axs[0], cax=cax_pvd, label=r"$\hat{\Omega}$")
@@ -225,7 +228,7 @@ axs[1].set_ylim(-0.6, 5.5)
 
 axs[1].set_xlabel("$x$")
 
-plt.savefig('/home/cwp29/Documents/papers/draft/figs/pvd_thresh.pdf')
+#plt.savefig('/home/cwp29/Documents/papers/draft/figs/pvd_thresh.pdf')
 plt.savefig('/home/cwp29/Documents/papers/draft/figs/pvd_thresh.png', dpi=300)
 
 plt.show()

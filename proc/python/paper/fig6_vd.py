@@ -118,7 +118,7 @@ print(zmaxs)
 print("Setting up data arrays...")
 fig, axs = plt.subplots(2,3,figsize=(12, 5), constrained_layout=True)
 
-contours_b = np.linspace(0, 0.1/B, 11)
+contours_b = np.linspace(0, md['N2']*9*L/B, 16)
 contour_lvls_trace = np.linspace(0.01, 0.1, 8)
 
 print("Setting up initial plot...")
@@ -133,6 +133,8 @@ for d in range(len(steps)):
     im_b_edge = axs[0, d].contour(Xf, Yf, plot_env[steps[d]], levels = contours_b, cmap='cool', alpha=0.8)
     im_b = axs[0,d].contourf(im_b_edge, levels=contours_b, cmap='cool', alpha=0.8, extend='min')
     im_t = axs[0,d].pcolormesh(X,Y,plot_plume[steps[d]], cmap='viridis')
+
+    im_t.set_clim(0, 0.05 * F0/8e-8)
 
     col = plt.cm.viridis(np.linspace(0,1, 2))[0]
     outline = axs[0,d].contour(Xf, Yf, plot_outline[steps[d]], levels=[0.5], colors=[col], alpha=0.7,
@@ -173,9 +175,6 @@ for d in range(len(steps)):
 
     axs[1,d].set_xlabel("buoyancy")
 
-    im_t.set_clim(0, np.max(phibins))
-
-
     axs[0,d].set_xlim(-0.1/L, 0.1/L)
     axs[0,d].set_ylim(-0.6, 5.5)
 
@@ -183,6 +182,6 @@ for d in range(len(steps)):
     axs[0,d].set_title("({1}) t = {0:.2f}".format(times[steps[d]], labels[d]))
 
 
-plt.savefig('/home/cwp29/Documents/papers/draft/figs/vd_evol.pdf')
-plt.savefig('/home/cwp29/Documents/papers/draft/figs/vd_evol.png', dpi=300)
+#plt.savefig('/home/cwp29/Documents/papers/draft/figs/vd_evol.pdf')
+#plt.savefig('/home/cwp29/Documents/papers/draft/figs/vd_evol.png', dpi=300)
 plt.show()

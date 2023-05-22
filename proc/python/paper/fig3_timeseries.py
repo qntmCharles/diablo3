@@ -82,12 +82,16 @@ tracer_data_vert = np.where(th2_xz[1:, 100:, int(md['Nx']/2)] >= tracer_thresh,
 plume_vert = np.where(tracer_data_vert >= tracer_thresh, 1, 0)
 
 im = plt.pcolormesh(X_v, Y_v, np.swapaxes(tracer_data_vert,0,1), cmap='viridis')
-im.set_clim(0,0.1)
+im.set_clim(0,0.05)
+
 print(np.max(tracer_data_vert))
-plt.contour(X_v[1:, 1:] + 0.5*md['LX']/md['Nx'],
+cont = plt.contour(X_v[1:, 1:] + 0.5*md['LX']/md['Nx'],
         Y_v[1:, 1:] + 0.5*md['LY']/md['Ny'],
         np.swapaxes(tracer_data_vert,0,1), levels=[tracer_thresh], colors=['r'],
         linestyles='--')
+
+cbar = plt.colorbar(im, extend='max', label='tracer concentration')
+cbar.add_lines(cont)
 
 #Calculate zmax:
 heights = []
@@ -114,6 +118,6 @@ plt.xlabel("t")
 plt.ylabel("z")
 
 plt.tight_layout()
-plt.savefig('/home/cwp29/Documents/papers/draft/figs/timeseries.png', dpi=300)
-plt.savefig('/home/cwp29/Documents/papers/draft/figs/timeseries.pdf')
+#plt.savefig('/home/cwp29/Documents/papers/draft/figs/timeseries.png', dpi=300)
+#plt.savefig('/home/cwp29/Documents/papers/draft/figs/timeseries.pdf')
 plt.show()

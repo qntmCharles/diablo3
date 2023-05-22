@@ -48,9 +48,6 @@ print("Complete metadata: ",md)
 gxf, gyf, gzf, dzf = get_grid(join(run_dir, 'grid.h5'), md)
 gx, gy, gz, dz = get_grid(join(run_dir, 'grid.h5'), md, fractional_grid=False)
 
-z_coords, x_coords = np.meshgrid(gzf, gxf, indexing='ij', sparse=True)
-
-
 ##### Get data #####
 
 with h5py.File(join(save_dir,"mean.h5"), 'r') as f:
@@ -114,6 +111,7 @@ print(md['b0']*md['r0']*md['r0'])
 ############################################################################################################
 
 bt_pdfs = strat_dists[:,:-1]
+print(bt_pdfs)
 zt_pdfs = t_me[:, idx_minf:idx_maxf+1]
 
 bt_pdfs = np.swapaxes(bt_pdfs, axis1=1, axis2=0)
@@ -138,6 +136,8 @@ zt_im = ax[1].pcolormesh(Tz, Z, zt_pdfs, shading='flat', cmap='viridis')
 
 
 print(centreline_b[idx_min-5:idx_min+5])
+print(idx_min)
+print(centreline_b[idx_min])
 ax[0].set_ylim(centreline_b[idx_min]/Bdim, centreline_b[idx_max]/Bdim)
 ax[1].set_ylim((plot_min-md['H'])/L, (plot_max-md['H'])/L)
 
@@ -167,6 +167,6 @@ ax[1].set_ylabel("z")
 ax[0].set_xlim(4/T, 15/T)
 ax[1].set_xlim(4/T, 15/T)
 
-fig.savefig('/home/cwp29/Documents/papers/draft/figs/hmap.png', dpi=300)
-fig.savefig('/home/cwp29/Documents/papers/draft/figs/hmap.pdf', dpi=300)
+#fig.savefig('/home/cwp29/Documents/papers/draft/figs/hmap.png', dpi=300)
+#fig.savefig('/home/cwp29/Documents/papers/draft/figs/hmap.pdf', dpi=300)
 plt.show()

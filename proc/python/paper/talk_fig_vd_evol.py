@@ -45,9 +45,6 @@ with h5py.File(save_dir+"/movie.h5", 'r') as f:
     times = np.array([float(f['th1_xz'][t].attrs['Time']) for t in time_keys])
     f.close()
 
-for i in range(1,NSAMP):
-    vd_flux[i] += vd_flux[i-1]
-
 ##### Non-dimensionalisation #####
 
 F0 = compute_F0(save_dir, md, tstart_ind = 6*4, verbose=False, zbot=0.7, ztop=0.95, plot=False)
@@ -67,8 +64,8 @@ X /= L
 Xf /= L
 
 Y -= md['H']
-Y /= L
 Yf -= md['H']
+Y /= L
 Yf /= L
 
 times /= T
@@ -119,9 +116,9 @@ for i in range(len(plot_outline)):
 print(zmaxs)
 
 print("Setting up data arrays...")
-fig, axs = plt.subplots(1,3,figsize=(12, 3), constrained_layout=True)
+fig, axs = plt.subplots(2,3,figsize=(12, 5), constrained_layout=True)
 
-contours_b = np.linspace(0, 0.1/B, 11)
+contours_b = np.linspace(0, md['N2']*9*L/B, 16)
 contour_lvls_trace = np.linspace(0.01, 0.1, 8)
 
 print("Setting up initial plot...")
@@ -132,24 +129,57 @@ print(min_vol)
 
 labels = ["a", "b", "c", "d", "e"]
 
-vd_flux = np.where(vd_flux == 0, np.NaN, vd_flux)
-
 for d in range(len(steps)):
-    vd_flux[steps[d]] = np.where(vd_flux[steps[d]] > 50*min_vol, vd_flux[steps[d]], np.NaN)
-    im_scatter = axs[d].pcolormesh(sx, sy, vd_flux[steps[d]], cmap='plasma')
+    im_b_edge = axs[0, d].contour(Xf, Yf, plot_env[steps[d]], levels = contours_b, cmap='cool', alpha=0.8)
+    im_b = axs[0,d].contourf(im_b_edge, levels=contours_b, cmap='cool', alpha=0.8, extend='min')
+    im_t = axs[0,d].pcolormesh(X,Y,plot_plume[steps[d]], cmap='viridis')
 
-    im_scatter.set_clim(0, 1)
+    im_t.set_clim(0, 0.03 * F0/8e-8)
 
+    col = plt.cm.viridis(np.linspace(0,1, 2))[0]
+    outline = axs[0,d].contour(Xf, Yf, plot_outline[steps[d]], levels=[0.5], colors=[col], alpha=0.7,
+            linewidths=[0.7])
+
+    vd[steps[d]] = np.where(vd[steps[d]] > 50*min_vol, vd[steps[d]], np.NaN)
+    im_scatter = axs[1,d].pcolormesh(sx, sy, vd[steps[d]], cmap='plasma')
+
+    im_scatter.set_clim(0, 0.6)
+
+    axs[0,d].set_aspect(1)
+
+    sx_nan = sx[~np.isnan(vd[steps[d]]+vd_flux[steps[d]+1])].flatten()
+    sy_nan = sy[~np.isnan(vd[steps[d]]+vd_flux[steps[d]+1])].flatten()
+    points = np.array(list(zip(sx_nan,sy_nan)))
+    points = np.append(points, np.array([[md['N2']*(zmaxs[steps[d]]*L-md['H'])/B, phibins[0]]]), axis=0)
+
+
+    if len(points) > 0:
+        hull = spatial.ConvexHull(points)
+
+        axs[1,d].plot(points[hull.simplices[0],0], points[hull.simplices[0],1], 'r--', label="convex envelope")
+        for simplex in hull.simplices:
+            axs[1,d].plot(points[simplex,0], points[simplex,1], 'r--')
+
+    strat_cont = axs[0, d].contour(Xf, Yf, plot_env[steps[d]], levels=[0], colors=['gray'], alpha=0.5)
     if d == len(steps)-1:
-        cb_vd = plt.colorbar(im_scatter, ax = axs[d], label=r"$\omega$")
-
+        axs[1,d].legend()
+        cb_vd = plt.colorbar(im_scatter, ax = axs[1,d], label=r"W")
+        cb_waves = fig.colorbar(im_b, ax = axs[0,d], location='right', shrink=0.7,
+            label="buoyancy")
+        cb_plume = fig.colorbar(im_t, ax = axs[0,d], location='right', shrink=0.7, label="tracer concentration",
+            extend='max')
+        cb_waves.add_lines(strat_cont)
     if d == 0:
-        axs[d].set_ylabel("tracer conc.")
+        axs[0,d].set_ylabel("$z$")
+        axs[1,d].set_ylabel("tracer conc.")
 
-    axs[d].set_xlabel("buoyancy")
+    axs[1,d].set_xlabel("buoyancy")
 
-    axs[d].set_title("({0}) t = {1:.2f}".format(labels[d],times[steps[d]]))
+    axs[0,d].set_xlim(-0.1/L, 0.1/L)
+    axs[0,d].set_ylim(-0.6, 5.5)
 
-#plt.savefig('/home/cwp29/Documents/papers/draft/figs/cfvd_evol.pdf')
-#plt.savefig('/home/cwp29/Documents/papers/draft/figs/cfvd_evol.png', dpi=300)
+    axs[0,d].set_xlabel("$x$")
+    axs[0,d].set_title("({1}) t = {0:.0f}".format(times[steps[d]], labels[d]))
+
+plt.savefig('/home/cwp29/Documents/talks/friday_fluids/vd_evol.png', dpi=300)
 plt.show()

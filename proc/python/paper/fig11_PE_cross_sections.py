@@ -53,7 +53,7 @@ with h5py.File(join(save_dir,"movie.h5"), 'r') as f:
 
 _,z_coords,_ = np.meshgrid(times, gzf, gxf, indexing='ij', sparse=True)
 
-Jb = (b - b[0]) * w
+#Jb = (b - b[0]) * w
 
 X, Y = np.meshgrid(gx, gz)
 Xf, Yf = np.meshgrid(gxf, gzf)
@@ -96,9 +96,10 @@ N2 /= np.power(T, -2)
 b /= B
 
 eps = np.exp(eps)
+Re_b = np.exp(Re_b)
 eps /= (np.power(L, 2) / np.power(T, 3))
 chi /= (np.power(L, 2) / np.power(T, 3))
-Jb /= (np.power(L, 2) / np.power(T, 3))
+#Jb /= (np.power(L, 2) / np.power(T, 3))
 #chi = np.log10(chi)
 #eps = np.log10(eps)
 
@@ -118,11 +119,11 @@ plot_outline = np.where(t <= tracer_thresh, 1, 0)
 eps = np.where(t >= tracer_thresh, eps, np.NaN)
 chi = np.where(t >= tracer_thresh, chi, np.NaN)
 N2 = np.where(t >= tracer_thresh, N2, np.NaN)
-Jb = np.where(t >= tracer_thresh, Jb, np.NaN)
+Re_b = np.where(t >= tracer_thresh, Re_b, np.NaN)
 
 """ ----------------------------------------------------------------------------------------------------- """
 
-fig, ax = plt.subplots(2,2, figsize=(12, 5), constrained_layout=True)
+fig, ax = plt.subplots(2,2, figsize=(10, 4.5), constrained_layout=True)
 
 for single_ax in ax.ravel():
     single_ax.set_aspect(1)
@@ -147,12 +148,13 @@ chi_contour_t = ax[0,1].contour(Xf, Yf, t[step], levels=[tracer_thresh], colors=
 chi_cb = plt.colorbar(chi_im, ax=ax[0,1], label=r"$\chi$")
 chi_im.set_clim(0, 0.1)
 
-Jb_im = ax[1,0].pcolormesh(X, Y, Jb[step], cmap='bwr')
-#Jb_contour_b = ax[1,0].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='darkturquoise', alpha=0.5)
-Jb_contour_t = ax[1,0].contour(Xf, Yf, t[step], levels=[tracer_thresh], colors='green', linestyles='--')
+Reb_im = ax[1,0].pcolormesh(X, Y, Re_b[step], cmap='hot_r')
+#Reb_contour_b = ax[1,0].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='darkturquoise', alpha=0.5)
+Reb_contour_t = ax[1,0].contour(Xf, Yf, t[step], levels=[tracer_thresh], colors='green', linestyles='--')
 
-Jb_cb = plt.colorbar(Jb_im, ax=ax[1,0], label=r"$J_b$")
-Jb_im.set_clim(-2, 2)
+Reb_cb = plt.colorbar(Reb_im, ax=ax[1,0], label=r"$\mathrm{Re}_b$")
+#Reb_im.set_clim(-1, 5)
+Reb_im.set_clim(0, 20)
 
 N2_im = ax[1,1].pcolormesh(X, Y, N2[step], cmap='bwr')
 #N2_contour_b = ax[1,1].contour(Xf, Yf, b[step], levels=contour_lvls_b, colors='grey', alpha=0.5)
@@ -164,7 +166,6 @@ N2_im.set_clim(-10, 10)
 """ ----------------------------------------------------------------------------------------------------- """
 now = datetime.now()
 
-#plt.savefig(join(save_dir, 'mixing_t%s_%s.pdf'%(step,now.strftime("%d-%m-%Y-%H"))), dpi=300)
-plt.savefig('/home/cwp29/Documents/papers/draft/figs/cross_sections.pdf')
-plt.savefig('/home/cwp29/Documents/papers/draft/figs/cross_sections.png', dpi=300)
+#plt.savefig('/home/cwp29/Documents/papers/draft/figs/cross_sections.pdf')
+#plt.savefig('/home/cwp29/Documents/papers/draft/figs/cross_sections.png', dpi=300)
 plt.show()

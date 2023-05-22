@@ -64,7 +64,9 @@ plt.yscale('log')
 
 plt.ylim(1e-3, 1e3)
 plt.xlim(1, 1e3)
-plt.axvline(0.5 * md['Nx']/md['LX'], color='k', linestyle='--')
+print(np.power(k, -1))
+print(2*md['LX']/md['Nx'])
+plt.axvline(2/3 * md['Nx']/md['LX'], color='k', linestyle='--')
 
 cols = plt.cm.rainbow(np.linspace(0,1,len(times)))
 for i,c in zip(range(len(times)),cols):

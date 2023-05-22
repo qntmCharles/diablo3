@@ -45,7 +45,7 @@ with h5py.File(join(save_dir,"movie.h5"), 'r') as f:
     times = np.array([f['th1_xz'][t].attrs['Time'] for t in time_keys])
     NSAMP = len(times)
 
-plot_max = 1.6*md['H']
+plot_max = 3*md['H']
 plot_min = 0.95*md['H']
 start_idx = get_index(6, times)
 

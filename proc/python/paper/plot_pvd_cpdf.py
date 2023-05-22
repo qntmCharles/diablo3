@@ -67,7 +67,7 @@ with h5py.File(join(save_dir,out_file), 'r') as f:
 
     for i in range(len(fields)):
         print("Loading field {0}".format(fields[i]))
-        field = np.array(f['Timestep'][fields[i]][:, idx_min:idx_max])
+        field = np.array(f['Timestep'][fields[i]][200:-200, idx_min:idx_max, 200:-200])
         if fields[i] == "TH1":
             field = np.gradient(field, gzf[idx_min:idx_max], axis = 1)
         if fields[i] in ["chi", "tked"]:
@@ -75,15 +75,28 @@ with h5py.File(join(save_dir,out_file), 'r') as f:
         field = np.where(np.isnan(pvd), np.nan, field) # restrict to plume
 
         results = []
+        volumes = []
         total_field = np.nansum(field)
+        total_count = np.count_nonzero(~np.isnan(field))
         for j in range(1, Nbins):
-            results.append(np.nansum(np.where(pvd <= svd_bins[j], field, np.nan)/total_field))
+            data = np.where(pvd <= svd_bins[j], field, np.nan)
+            results.append(np.nansum(data)/total_field)
+            volumes.append(np.count_nonzero(~np.isnan(data))/total_count)
 
-        plt.plot(bins_plot, results)
+        results = np.array(results)
+        volumes = np.array(volumes)
+
+        plt.plot(bins_plot, results, color='b')
+        plt.plot(bins_plot, volumes, color='r')
         plt.axvline(0)
         plt.axvline(5e-3)
         plt.xlabel(r"$\hat{\Omega}$")
         plt.ylabel("fraction of total {0}".format(fields[i]))
+
+        plt.figure()
+        plt.axvline(0)
+        plt.axvline(5e-3)
+        plt.plot(bins_plot, results-volumes)
         plt.show()
 
 

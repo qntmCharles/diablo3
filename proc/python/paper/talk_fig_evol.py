@@ -79,8 +79,7 @@ step3 = 56
 
 th1_xz = np.where(th1_xz < 1e-3/B, 0, th1_xz)
 
-#tracer_thresh = 5e-4
-tracer_thresh = 9e-4
+tracer_thresh = 5e-4
 plot_env = np.where(th2_xz <= tracer_thresh, th1_xz, np.NaN)
 plot_plume = np.where(th2_xz > tracer_thresh, th2_xz, np.NaN)
 plot_outline = np.where(th2_xz <= tracer_thresh, 1, 0)
@@ -144,20 +143,20 @@ for ax in axs:
 
 axs[0].set_xlabel("$x$")
 axs[0].set_ylabel("$z$")
-axs[0].set_title("(a) t = {0:.2f}".format(times[step1]))
+axs[0].set_title("(a) t = {0:.0f}".format(times[step1]))
 axs[0].set_xlim(-0.15/L, 0.15/L)
 axs[0].set_ylim(np.min(Y), 9)
 
 axs[1].set_xlabel("$x$")
-axs[1].set_title("(b) t = {0:.2f}".format(times[step2]))
+axs[1].set_title("(b) t = {0:.0f}".format(times[step2]))
 axs[1].set_xlim(-0.15/L, 0.15/L)
 axs[1].set_ylim(np.min(Y), 9)
 
 axs[2].set_xlabel("$x$")
-axs[2].set_title("(c) t = {0:.2f}".format(times[step3]))
+axs[2].set_title("(c) t = {0:.0f}".format(times[step3]))
 axs[2].set_xlim(-0.15/L, 0.15/L)
 axs[2].set_ylim(np.min(Y), 9)
 
 #plt.savefig('/home/cwp29/Documents/papers/draft/figs/evolution.pdf')
-plt.savefig('/home/cwp29/Documents/papers/draft/figs/evolution.png', dpi=300)
+plt.savefig('/home/cwp29/Documents/talks/friday_fluids/evolution.png', dpi=300)
 plt.show()

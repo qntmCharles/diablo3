@@ -54,16 +54,16 @@ field_maxs = [0, 0, 4, 15, 20]
 with h5py.File(join(save_dir,out_file), 'r') as f:
     print("Keys: %s" % f['Timestep'].keys())
 
-    phi = np.array(f['Timestep']['TH2'][:, idx_min:idx_max, :]) # restrict to stratified layer
+    phi = np.array(f['Timestep']['TH2'][200:-200, idx_min:idx_max, 200:-200]) # restrict to stratified layer
     print("Loaded phi field")
 
-    pvd = np.array(f['Timestep']['PVD'][:, idx_min:idx_max, :]) # restrict to stratified layer
+    pvd = np.array(f['Timestep']['PVD'][200:-200, idx_min:idx_max, 200:-200]) # restrict to stratified layer
     pvd = np.where(pvd == -1e9, np.nan, pvd)
     print("Loaded PVD field")
 
     for i in range(len(fields)):
         print("Loading field {0}".format(fields[i]))
-        field = np.array(f['Timestep'][fields[i]][:, idx_min:idx_max])
+        field = np.array(f['Timestep'][fields[i]][200:-200, idx_min:idx_max, 200:-200])
         if fields[i] == "TH1":
             field = np.gradient(field, gzf[idx_min:idx_max], axis = 1)
         #if fields[i] in ["chi", "tked"]:

@@ -1,4 +1,5 @@
-# Script loads in 2D slices and produces a movie of the simulation output import numpy as np import h5py, gc
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0],".."))
 import h5py
 import numpy as np
 from matplotlib import pyplot as plt
@@ -36,16 +37,14 @@ with h5py.File(save_dir+"/movie.h5", 'r') as f:
     print(time_keys)
     # Get buoyancy data
     th2_xy = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
-    th2_xy = g2gf_1d(th2_xy)
     th2_zy = np.array([np.array(f['th1_xz'][t]) for t in time_keys])
-    th2_zy = g2gf_1d(th2_zy)
     NSAMP = len(th2_xy)
     times = np.array([float(f['th2_xz'][tstep].attrs['Time']) for tstep in time_keys])
     f.close()
 
 print(th2_xy.shape)
 
-ztest = 0.8*md['H']
+ztest = 0.9*md['H']
 h = get_index(ztest, gzf)
 cols = plt.cm.rainbow(np.linspace(0, 1, NSAMP))
 

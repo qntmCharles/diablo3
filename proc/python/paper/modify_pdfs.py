@@ -47,11 +47,16 @@ print(idx_min, idx_max)
 
 print("Complete metadata: ", md)
 
-fields = ["chi", "tked", "Ri", "Re_b", "TH1"]
-field_mins = [-12.5, -12.5, -2, -3, -5]
-field_maxs = [0, 0, 4, 15, 20]
+fields = ["tked", "tked", "chi", "Ri", "Re_b", "TH1"]
+field_mins = [-12.5, -12.5, -12.5, -2, -3, -5]
+field_maxs = [0, 0, 0, 4, 15, 20]
 
 pvd_lim = 50
+
+Xf, Yf = np.meshgrid(gx[pvd_lim:-pvd_lim], gz[idx_min:idx_max+1])
+X, Y = np.meshgrid(gxf[pvd_lim:-pvd_lim], gz[idx_min:idx_max])
+
+flag = True
 
 with h5py.File(join(save_dir,out_file), 'r') as f:
     print("Keys: %s" % f['Timestep'].keys())
@@ -60,12 +65,48 @@ with h5py.File(join(save_dir,out_file), 'r') as f:
     pvd = np.where(pvd == -1e9, np.nan, pvd)
     print("Loaded PVD field")
 
+    phi = np.array(f['Timestep']['TH2'][pvd_lim:-pvd_lim, idx_min:idx_max, pvd_lim:-pvd_lim])
+
     for i in range(len(fields)):
         print("Loading field {0}".format(fields[i]))
         field = np.array(f['Timestep'][fields[i]][pvd_lim:-pvd_lim, idx_min:idx_max, pvd_lim:-pvd_lim])
+
         if fields[i] == "TH1":
             field = np.gradient(field, gzf[idx_min:idx_max], axis = 1)
         field = np.where(np.isnan(pvd), np.nan, field) # restrict to plume
+
+        print(np.nanmin(field), np.nanmax(field))
+        if fields[i] == "tked" and not flag:
+            nu_t = np.array(f['Timestep']['NU_T'][pvd_lim:-pvd_lim, idx_min:idx_max, pvd_lim:-pvd_lim])
+            nu_t = np.where(np.isnan(pvd), np.nan, nu_t) # restrict to plume
+            print(np.count_nonzero(~np.isnan(nu_t)))
+
+            field = np.power(10, field)
+            field /= md['NU_RUN'] + nu_t # remove nu_eff factor
+
+            nu_t_test = np.where(nu_t != 0, np.nan, 0)
+
+            plt.figure()
+            plt.pcolormesh(Xf, Yf, np.where(np.isnan(nu_t_test), np.nan, phi)[int(md['Nx']/2), :, :])
+            plt.contour(X, Y, phi[int(md['Nx']/2), :, :], levels=[5e-4], colors='g', linestyles='--')
+
+            print(np.count_nonzero(~np.isnan(nu_t_test)))
+            nu_t = np.where(nu_t == 0, np.nan, nu_t)
+            nu_t = np.log10(nu_t)
+
+            plt.figure()
+            h, bins = np.histogram(nu_t.flatten(), bins=128, range= (-10, -5))
+            plt.plot(0.5*(bins[1:]+bins[:-1]), h)
+
+            #####
+            #nu_t_thresh = np.where(nu_t < np.log10(md['NU_RUN']), 0, nu_t)
+            nu_t_thresh = nu_t
+
+            h, bins = np.histogram(nu_t_thresh.flatten(), bins=128, range= (-10, -5))
+            plt.plot(0.5*(bins[1:]+bins[:-1]), h)
+
+            field *= md['NU_RUN']+np.power(10, nu_t_thresh)
+            field = np.log10(field)
 
         # restrict to mixing region
         pvd_thresh = 5e-3
@@ -74,10 +115,7 @@ with h5py.File(join(save_dir,out_file), 'r') as f:
         plume_field = np.where(pvd <= 0, field, np.nan)
         print(field.shape)
 
-        #im = plt.imshow(field[int(md['Nx']/2), :, :])
-        #im.set_clim(field_mins[i], field_maxs[i])
-        #plt.show()
-
+        fig = plt.figure()
         plt.title(fields[i])
         h, bins = np.histogram(field.flatten(), bins=128, range = (field_mins[i], field_maxs[i]),
                 density=True)
@@ -119,9 +157,10 @@ with h5py.File(join(save_dir,out_file), 'r') as f:
         print(bins_plot[np.argmax(mixed_h)])
         print(bins_plot[np.argmax(mixing_h)])
 
-        plt.axvline(bins_plot[np.argmax(plume_h)], color='b')
-        plt.axvline(bins_plot[np.argmax(mixed_h)], color='r')
-        plt.axvline(bins_plot[np.argmax(mixing_h)], color='g')
-        plt.show()
+        #plt.axvline(bins_plot[np.argmax(plume_h)], color='b')
+        #plt.axvline(bins_plot[np.argmax(mixed_h)], color='r')
+        #plt.axvline(bins_plot[np.argmax(mixing_h)], color='g')
+        if not flag: plt.show()
+        flag = False
 
     f.close()
