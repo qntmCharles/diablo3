@@ -96,7 +96,7 @@ sx, sy = np.meshgrid(bbins, phibins)
 print("Total time steps: %s"%NSAMP)
 print("Dimensional times: ",times)
 
-steps = [24, 40, 56]
+steps = [24, 38]#, 56]
 
 th1_xz = np.where(th1_xz < 1e-3/B, 0, th1_xz)
 
@@ -135,10 +135,10 @@ labels = ["a", "b", "c", "d", "e"]
 vd_flux = np.where(vd_flux == 0, np.NaN, vd_flux)
 
 for d in range(len(steps)):
-    vd_flux[steps[d]] = np.where(vd_flux[steps[d]] > 50*min_vol, vd_flux[steps[d]], np.NaN)
+    #vd_flux[steps[d]] = np.where(vd_flux[steps[d]] > 50*min_vol, vd_flux[steps[d]], np.NaN)
     im_scatter = axs[d].pcolormesh(sx, sy, vd_flux[steps[d]], cmap='plasma')
 
-    im_scatter.set_clim(0, 1)
+    #im_scatter.set_clim(0, 1)
 
     if d == len(steps)-1:
         cb_vd = plt.colorbar(im_scatter, ax = axs[d], label=r"$\omega$")

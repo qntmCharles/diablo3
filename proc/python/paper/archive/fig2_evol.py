@@ -3,6 +3,7 @@ sys.path.insert(1, os.path.join(sys.path[0],".."))
 import h5py
 import numpy as np
 from matplotlib import pyplot as plt
+import matplotlib.colors as colors
 import matplotlib.animation as animation
 from mpl_toolkits import axes_grid1
 from mpl_toolkits.axes_grid1 import make_axes_locatable
@@ -77,13 +78,17 @@ step1 = 24
 step2 = 40
 step3 = 56
 
-th1_xz = np.where(th1_xz < 1e-3/B, 0, th1_xz)
+th1_xz = np.where(th1_xz <= 1e-3/B, 0, th1_xz)
 
-#tracer_thresh = 5e-4
-tracer_thresh = 9e-4
-plot_env = np.where(th2_xz <= tracer_thresh, th1_xz, np.NaN)
-plot_plume = np.where(th2_xz > tracer_thresh, th2_xz, np.NaN)
-plot_outline = np.where(th2_xz <= tracer_thresh, 1, 0)
+tracer_thresh = 7e-4
+tracer_thresh_low = 2e-3
+
+plot_plume = np.where(
+        np.logical_or(
+            np.logical_and(th2_xz > tracer_thresh_low, Yf < -1),
+            np.logical_and(th2_xz > tracer_thresh, Yf >= -1)),
+        th2_xz, np.NaN)
+plot_env = np.where(np.logical_and(np.isnan(plot_plume), Yf >= -1), th1_xz, np.NaN)
 
 print("Setting up data arrays...")
 fig, axs = plt.subplots(1,3,figsize=(12, 4), constrained_layout=True)
@@ -98,21 +103,23 @@ print("Setting up initial plot...")
 #im2_w = axs[2].pcolormesh(X,Y,plot_env[step3], cmap='cool')
 
 im0_w_edge = axs[0].contour(Xf, Yf, plot_env[step1], levels = contours_b, cmap='cool', alpha=0.8)
-im0_w = axs[0].contourf(im0_w_edge, levels=contours_b, cmap='cool', alpha=0.8, extend='min')
+#im0_w = axs[0].contourf(im0_w_edge, levels=contours_b, cmap='cool', alpha=0.8, extend='min')
 
 im1_w_edge = axs[1].contour(Xf, Yf, plot_env[step2], levels = contours_b, cmap='cool', alpha=0.8)
-im1_w = axs[1].contourf(im1_w_edge, levels=contours_b, cmap='cool', alpha=0.8, extend='min')
+#im1_w = axs[1].contourf(im1_w_edge, levels=contours_b, cmap='cool', alpha=0.8, extend='min')
 
 im2_w_edge = axs[2].contour(Xf, Yf, plot_env[step3], levels = contours_b, cmap='cool', alpha=0.8)
-im2_w = axs[2].contourf(im2_w_edge, levels=contours_b, cmap='cool', alpha=0.8, extend='min')
+#im2_w = axs[2].contourf(im2_w_edge, levels=contours_b, cmap='cool', alpha=0.8, extend='min')
 
 im0_t = axs[0].pcolormesh(X,Y,plot_plume[step1], cmap='viridis')
 im1_t = axs[1].pcolormesh(X,Y,plot_plume[step2], cmap='viridis')
 im2_t = axs[2].pcolormesh(X,Y,plot_plume[step3], cmap='viridis')
 
-strat_cont = axs[0].contour(Xf, Yf, plot_env[step1], levels=[0], cmap='gray', alpha=0.5)
-strat_cont = axs[1].contour(Xf, Yf, plot_env[step2], levels=[0], cmap='gray', alpha=0.5)
-strat_cont = axs[2].contour(Xf, Yf, plot_env[step3], levels=[0], cmap='gray', alpha=0.5)
+plot_outline = np.where(np.logical_and(th1_xz > 0, Yf > -1), plot_env, 0)
+thresh = 1e-3/B
+strat_cont = axs[0].contour(Xf, Yf, plot_outline[step1], levels=[thresh], cmap='gray', alpha=0.5)
+strat_cont = axs[1].contour(Xf, Yf, plot_outline[step2], levels=[thresh], cmap='gray', alpha=0.5)
+strat_cont = axs[2].contour(Xf, Yf, plot_outline[step3], levels=[thresh], cmap='gray', alpha=0.5)
 
 #col = plt.cm.viridis(np.linspace(0,1, 2))[0]
 #outline0 = axs[0].contour(Xf, Yf, plot_outline[step1], levels=[0.5], colors=[col],alpha=0.7)
@@ -123,7 +130,12 @@ axs[0].set_aspect(1)
 axs[1].set_aspect(1)
 axs[2].set_aspect(1)
 
-cb_waves = fig.colorbar(im0_w, ax = axs[2], location='right', shrink=0.7,
+norm = colors.Normalize(vmin = im0_w_edge.cvalues.min(), vmax = im0_w_edge.cvalues.max())
+sm = plt.cm.ScalarMappable(norm=norm, cmap=im0_w_edge.cmap)
+sm.set_array([])
+
+#cb_waves = fig.colorbar(im0_w, ax = axs[2], location='right', shrink=0.7, label=r"buoyancy")
+cb_waves = fig.colorbar(sm, ticks=im0_w_edge.levels[::2], ax = axs[2], location='right', shrink=0.7,
     label=r"buoyancy")
 cb_plume = fig.colorbar(im0_t, ax = axs[2], location='right', shrink=0.7, label="tracer concentration",
         extend='max')

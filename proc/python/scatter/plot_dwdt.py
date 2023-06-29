@@ -4,6 +4,7 @@ import h5py
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.animation as animation
+import matplotlib.colors as colors
 from mpl_toolkits import axes_grid1
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 from datetime import datetime
@@ -88,10 +89,11 @@ with h5py.File(save_dir+"/mean.h5", 'r') as f:
 
 bbins /= B
 
+
 sx, sy = np.meshgrid(bbins, phibins)
 
 print("Total time steps: %s"%NSAMP)
-print("Dimensional times: ",times)
+print("Dimensional times: ",times * N)
 
 steps = [24, 40, 56]
 
@@ -125,9 +127,13 @@ print("Setting up initial plot...")
 
 min_vol = np.power(md['LX']/md['Nx'], 2) * md['LZ']/md['Nz']
 min_vol /= V
+
+min_vol *= (64/len(bbins))**2
 print(min_vol)
 
 labels = ["a", "b", "c", "d", "e"]
+
+dwdt = np.gradient(vd, times, axis=0)
 
 for d in range(len(steps)):
     im_b_edge = axs[0, d].contour(Xf, Yf, plot_env[steps[d]], levels = contours_b, cmap='cool', alpha=0.8)
@@ -140,20 +146,22 @@ for d in range(len(steps)):
     outline = axs[0,d].contour(Xf, Yf, plot_outline[steps[d]], levels=[0.5], colors=[col], alpha=0.7,
             linewidths=[0.7])
 
-    vd[steps[d]] = np.where(vd[steps[d]] > 50*min_vol, vd[steps[d]], np.NaN)
-    im_scatter = axs[1,d].pcolormesh(sx, sy, vd[steps[d]], cmap='plasma')
+    #vd[steps[d]] = np.where(vd[steps[d]] > 50*min_vol, vd[steps[d]], np.NaN)
+    im_scatter = axs[1,d].pcolormesh(sx, sy, dwdt[steps[d]], cmap='bwr', norm=colors.CenteredNorm())
+    w_cont = axs[1, d].contourf(sx, sy, np.abs(dwdt[steps[d]]), cmap='plasma',
+            levels=[0, 0.01, 0.05, 0.1])
 
-    im_scatter.set_clim(0, 0.6)
+    #im_scatter.set_clim(0, 0.6)
 
     axs[0,d].set_aspect(1)
 
     sx_nan = sx[~np.isnan(vd[steps[d]]+vd_flux[steps[d]+1])].flatten()
     sy_nan = sy[~np.isnan(vd[steps[d]]+vd_flux[steps[d]+1])].flatten()
     points = np.array(list(zip(sx_nan,sy_nan)))
-    points = np.append(points, np.array([[md['N2']*(zmaxs[steps[d]]*L-md['H'])/B, phibins[0]]]), axis=0)
 
 
     if len(points) > 0:
+        points = np.append(points, np.array([[md['N2']*(zmaxs[steps[d]]*L-md['H'])/B, phibins[0]]]), axis=0)
         hull = spatial.ConvexHull(points)
 
         axs[1,d].plot(points[hull.simplices[0],0], points[hull.simplices[0],1], 'r--', label="convex envelope")
@@ -164,6 +172,7 @@ for d in range(len(steps)):
     if d == len(steps)-1:
         axs[1,d].legend()
         cb_vd = plt.colorbar(im_scatter, ax = axs[1,d], label=r"W")
+        cb_w = plt.colorbar(w_cont, ax=axs[1,d])
         cb_waves = fig.colorbar(im_b, ax = axs[0,d], location='right', shrink=0.7,
             label="buoyancy")
         cb_plume = fig.colorbar(im_t, ax = axs[0,d], location='right', shrink=0.7, label="tracer concentration",
@@ -181,7 +190,4 @@ for d in range(len(steps)):
     axs[0,d].set_xlabel("$x$")
     axs[0,d].set_title("({1}) t = {0:.2f}".format(times[steps[d]], labels[d]))
 
-
-#plt.savefig('/home/cwp29/Documents/papers/draft/figs/vd_evol.pdf')
-#plt.savefig('/home/cwp29/Documents/papers/draft/figs/vd_evol.png', dpi=300)
 plt.show()

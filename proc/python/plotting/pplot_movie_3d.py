@@ -88,8 +88,8 @@ axs[1].set_xlabel("$y$")
 axs[0].set_ylim(0, 3*md['H'])
 axs[1].set_ylim(0, 3*md['H'])
 
-axs[0].set_xlim(0.2, 0.4)
-axs[1].set_xlim(0.2, 0.4)
+#axs[0].set_xlim(0.2, 0.4)
+#axs[1].set_xlim(0.2, 0.4)
 
 axs[0].set_aspect(1)
 axs[1].set_aspect(1)

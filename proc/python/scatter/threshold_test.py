@@ -1,5 +1,4 @@
 import sys, os
-import matplotlib.colors as colors
 sys.path.insert(1, os.path.join(sys.path[0],".."))
 import h5py
 import numpy as np
@@ -8,10 +7,7 @@ from matplotlib import pyplot as plt
 import matplotlib.animation as animation
 from datetime import datetime
 from functions import get_metadata, read_params, get_grid, g2gf_1d, get_plotindex, get_index, compute_F0
-from scipy import ndimage, interpolate
-from skimage import filters, exposure
-import numpy.polynomial.polynomial as poly
-from scipy.signal import argrelextrema
+from scipy import ndimage
 
 ##### USER DEFINED VARIABLES #####
 
@@ -55,22 +51,18 @@ with h5py.File(join(save_dir, "movie.h5"), 'r') as f:
     time_keys = list(f['th1_xz'])
     print(time_keys)
 
-    svd = np.array([f['pvd'][t] for t in time_keys])
+    pvd = np.array([f['pvd'][t] for t in time_keys])
     vd = np.array([f['td_scatter'][t] for t in time_keys])
-    S = np.array([np.array(f['td_flux'][t]) for t in time_keys])
+    vd_flux = np.array([np.array(f['td_flux'][t]) for t in time_keys])
     times = np.array([f['pvd'][t].attrs['Time'] for t in time_keys])
     NSAMP = len(times)
-
-Scum = np.copy(S)
-
-M = np.copy(svd)
-for i in range(1, NSAMP):
-    Scum[i] += Scum[i-1]
-    M[i] *= np.sum(Scum[i])
 
 with h5py.File(save_dir+"/mean.h5", 'r') as f:
     bbins = np.array(f['PVD_bbins']['0001'])
     phibins = np.array(f['PVD_phibins']['0001'])
+
+for i in range(1,NSAMP):
+    vd_flux[i] += vd_flux[i-1]
 
 db = bbins[1] - bbins[0]
 dphi = phibins[1] - phibins[0]
@@ -87,53 +79,28 @@ V = L * L * L
 
 times /= T
 db /= B
-M /= V
 vd /= V
-S /= V
-Scum /= V
+vd_flux /= V
 
 ##### ====================== #####
-#plt.figure()
-#plt.axhline(0, color='k', linestyle='--')
 
-vd = np.where(vd == 0, np.nan, vd)
-M = np.where(np.isnan(vd), np.nan, M)
+sim_step = 58
 
-db = bbins[1] - bbins[0]
-dphi = phibins[1] - phibins[0]
+pvd = np.array([(vd[i] - vd_flux[i])/np.nansum(vd_flux[i]) for i in range(NSAMP)])
 
-sx, sy = np.meshgrid(np.append(bbins-db/2, bbins[-1]+db/2),
-        np.append(phibins - dphi/2, phibins[-1] + dphi/2))
+dwdt = np.gradient(vd, times, axis=0)
 
-t_idxs = range(20, NSAMP-1)
-cols = plt.cm.rainbow(np.linspace(0, 1, len(t_idxs)))
-threshs = []
-for t,c in zip(t_idxs, cols):
-    M_lim = np.nanmax(M[t])
-    M_bins = np.linspace(0, M_lim, 100)
+pvd_threshs = np.linspace(0, np.max(pvd[sim_step]), 10)
 
-    dWdt_int = []
-    S_int = []
+s_int = np.nansum(np.gradient(vd_flux, times, axis=0), axis=(1,2))
 
-    for m in M_bins[1:]:
-        dWdt_int.append(np.nansum(np.where(M[t] < m, (vd[t+1]-vd[t])/md['SAVE_STATS_DT'], 0)))
-        S_int.append(np.nansum(np.where(M[t] < m, S[t], 0)))
+#plt.plot(times, s_int)
 
-    dWdt_int = np.array(dWdt_int)
-    S_int = np.array(S_int)
+cols = plt.cm.rainbow(np.linspace(0, 1, NSAMP))
+for m,c in zip(pvd_threshs, cols):
+    W_int = np.nansum(np.where(pvd > m, vd, np.NaN), axis=(1,2))
+    dW_int_dt = np.gradient(W_int, times, axis=0)
+    plt.plot(times, dW_int_dt/s_int, label=m)
 
-    #plt.plot(M_bins[1:], dWdt_int - S_int, label="{0:.2f}".format(times[t]), color=c)
-
-    if np.min(dWdt_int - S_int) < 0:
-        f = interpolate.interp1d(dWdt_int-S_int, M_bins[1:])
-        thresh = f(0)
-        #plt.axvline(f(0), color=c, linestyle=':')
-    else:
-        thresh = 0
-
-    threshs.append(thresh)
-
-plt.plot(times[t_idxs], threshs)
-plt.plot(times[t_idxs], ndimage.uniform_filter1d(threshs, size=20), color='r')
 plt.legend()
 plt.show()

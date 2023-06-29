@@ -135,7 +135,6 @@ bbins /= B
 
 W /= V
 S /= V
-Scum /= V
 M /= V
 F_b /= V*B/T
 F_phi /= V/T
@@ -646,16 +645,6 @@ if save:
     fig8.savefig(join(fig_save_dir, 'div_plot.pdf'))
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Figure 9: calculating threshold for M
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-thresh_res = 10
-
-for i in range(NSAMP):
-    for m in np.linspace(0, np.max(M[i]), thresh_res):
-
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Figure 9: partitioned distribution M
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -703,21 +692,6 @@ axs8[1].set_ylim(-0.6, 5.5)
 if save:
     fig8.savefig(join(fig_save_dir, 'M_thresh_plot.png'), dpi=300)
     fig8.savefig(join(fig_save_dir, 'M_thresh_plot.pdf'))
-
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Figure 10: determining steady-state
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-fig9 = plt.figure(figsize=(8, 3))
-
-plt.plot(times, np.nansum(W, axis=(1, 2)), color='k', label=r"sum of $W$")
-plt.plot(times, np.nansum(Scum, axis=(1, 2)), color='k', linestyle='dashed', label=r"sum of cumulative $S$")
-
-W_undiluted = np.where(M <= Omega_thresh, W, np.nan)
-W_mixed = np.where(M > Omega_thresh, W, np.nan)
-
-plt.plot(times, np.nansum(W_undiluted, axis=(1, 2)), color='b', label=r"sum of $M<0$")
-plt.plot(times, np.nansum(W_mixed, axis=(1, 2)), color='r', label=r"sum of $M>0$")
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 

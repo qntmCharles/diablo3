@@ -229,6 +229,6 @@ axs[1].set_ylim(-0.6, 5.5)
 axs[1].set_xlabel("$x$")
 
 #plt.savefig('/home/cwp29/Documents/papers/draft/figs/pvd_thresh.pdf')
-plt.savefig('/home/cwp29/Documents/papers/draft/figs/pvd_thresh.png', dpi=300)
+#plt.savefig('/home/cwp29/Documents/papers/draft/figs/pvd_thresh.png', dpi=300)
 
 plt.show()
