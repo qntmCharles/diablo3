@@ -1,4 +1,5 @@
-# Script loads in 2D slices and produces a movie of the simulation output import numpy as np import h5py, gc
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0],".."))
 import h5py
 import numpy as np
 from matplotlib import pyplot as plt

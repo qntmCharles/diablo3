@@ -170,5 +170,5 @@ fig.set_facecolor((0.9375, 0.9375, 0.9375))
 
 #plt.savefig('/home/cwp29/Documents/papers/draft/figs/cross_sections.pdf')
 #plt.savefig('/home/cwp29/Documents/papers/draft/figs/cross_sections.png', dpi=300)
-plt.savefig('/home/cwp29/Documents/posters/climdyn_workshop/figures/cross_sections.png', dpi=300)
+#plt.savefig('/home/cwp29/Documents/posters/climdyn_workshop/figures/cross_sections.png', dpi=300)
 plt.show()

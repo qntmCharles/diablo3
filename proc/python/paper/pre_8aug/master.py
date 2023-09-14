@@ -60,7 +60,10 @@ with h5py.File(join(save_dir, 'movie.h5'), 'r') as f:
 
     W = np.array([np.array(f['td_scatter'][t]) for t in time_keys])
     S = np.array([np.array(f['td_flux'][t]) for t in time_keys])
+    #Wc = np.array([np.array(f['td_cscatter'][t]) for t in time_keys])
+    Sc = np.array([np.array(f['td_csource'][t]) for t in time_keys])
     Scum = np.copy(S)
+    Sccum = np.copy(Sc)
     F_b = np.array([np.array(f['td_vel_1'][t]) for t in time_keys])
     F_phi = np.array([np.array(f['td_vel_2'][t]) for t in time_keys])
 
@@ -108,7 +111,8 @@ with open(join(save_dir, "time.dat"), 'r') as f:
 
 for i in range(1, NSAMP):
     Scum[i] += Scum[i-1]
-    #boundary_flux[i] += boundary_flux[i-1]
+    Sccum[i] += Sccum[i-1]
+    boundary_flux[i] += boundary_flux[i-1]
 
 bin_end = int(np.where(bbins_file == -1)[0][0])
 source_dists[:, bin_end:] = np.nan
@@ -174,6 +178,10 @@ bbins /= B
 
 md['SAVE_STATS_DT'] /= T
 
+#Wc /= V
+Sc /= V
+Sccum /= V
+
 W /= V
 S /= V
 Scum /= V
@@ -196,14 +204,14 @@ print("Dimensional times: ",times * T)
 
 x_max = 0.1/L
 
-bmax_plot = 3.7
-phimax_plot = 0.04
+bmax_plot = 3.2
+phimax_plot = 0.02
 factor = 0.7
 aspect = factor*bmax_plot/phimax_plot
 
 #####
 
-steps = [24, 40, 50]
+steps = [24, 40, 56]
 labels = ["a", "b", "c", "d", "e", "f", "g", "h"]
 
 tracer_thresh = 7e-4
@@ -220,7 +228,7 @@ idx_maxf = get_plotindex(plot_max, gzf)
 idx_min = idx_minf
 idx_max = idx_maxf+1
 
-hmap_plot_max = 1.45*md['H']
+hmap_plot_max = 1.3*md['H']
 hmap_plot_min = 0.98*md['H']
 
 hmap_idx_minf = get_plotindex((hmap_plot_min - md['H'])/L, gzf)-1
@@ -356,7 +364,7 @@ cont = plt.contour(X_v[1:, 1:] + 0.5*md['LX']/md['Nx'],
         np.swapaxes(tracer_data_vert,0,1), levels=[tracer_thresh], colors=['r'],
         linestyles='--')
 
-cbar = plt.colorbar(im, extend='max', label=r"$\phi$")
+cbar = plt.colorbar(im, extend='max', label='tracer concentration')
 cbar.add_lines(cont)
 
 #Calculate zmax:
@@ -444,7 +452,7 @@ for step,c in zip(t_inds, tcols):
     ax4.plot(strat_dists[step,:-1]/area, bbins_plot, color=c, label = "t={0:.0f}".format(times[step]))
 
 ax4.set_ylabel("$b$")
-ax4.set_xlabel(r"$\phi$ (normalised)")
+ax4.set_xlabel("tracer concentration (normalised)")
 ax4.set_ylim(0, 0.065/B)
 ax4.set_xlim(0, 3)
 ax4.legend(loc='upper left', bbox_to_anchor=(0.05, 0.98))
@@ -522,24 +530,22 @@ if save:
 
 fig6, axs = plt.subplots(3,3,figsize=(10, 6), constrained_layout=True)
 
-W_thresh = np.where(W < 1e-3, np.nan, W)
-
 for d in range(len(steps)):
     im_b_edge = axs[0, d].contour(Xf, Yf, plot_env[steps[d]], levels = contours_b, cmap='cool', alpha=0.8)
     im_phi = axs[0,d].pcolormesh(X,Y,plot_plume[steps[d]], cmap='viridis')
 
-    im_W = axs[1,d].pcolormesh(sx, sy, W_thresh[steps[d]], cmap='plasma')
+    im_W = axs[1,d].pcolormesh(sx, sy, W[steps[d]], cmap='plasma')
     axs[1,d].set_aspect(aspect)
 
     im_S = axs[2,d].pcolormesh(sx, sy, S[steps[d]], cmap='coolwarm', norm=S_norm)
     axs[2,d].set_aspect(aspect)
 
     im_phi.set_clim(0, 0.05)
-    im_W.set_clim(0, 0.1)
+    im_W.set_clim(0, 0.6)
 
     max_height = gzf[np.max(np.argwhere(th2_xz[steps[d]] > tracer_thresh)[:, 0])]
 
-    mask = ~np.isnan(W_thresh[steps[d]])
+    mask = ~np.isnan(W[steps[d]])
 
     sx_bl, sy_bl = np.meshgrid(bbins - db/2, phibins - dphi/2)
     sx_br, sy_br = np.meshgrid(bbins + db/2, phibins - dphi/2)
@@ -674,9 +680,8 @@ M_lim = np.nanmax(M[steps[-1]])
 im_M_bphi = axs8[0].pcolormesh(sx, sy, M[steps[-1]], cmap=custom_cmap,
         norm=colors.CenteredNorm(halfrange = .6*M_lim), alpha=0.6)
 
-fn = 4 # filter_num
-axs8[0].quiver(sxf[::fn,::fn], syf[::fn, ::fn], F_b[steps[-1], ::fn, ::fn],
-        F_phi[steps[-1], ::fn, ::fn], angles='xy', units='xy', pivot='mid',
+axs8[0].quiver(sxf[::2,::2], syf[::2, ::2], F_b[steps[-1], ::2, ::2],
+        F_phi[steps[-1], ::2, ::2], angles='xy', units='xy', pivot='mid',
         fc='k', ec='k', linewidth=0.1, scale=0.1)
 
 axs8[0].set_xlim(bbins[0]-db/2, bmax_plot)
@@ -708,7 +713,7 @@ axs8[0].set_xlabel(r"$b$")
 axs8[1].set_xlabel(r"$b$")
 
 axs8[0].set_title(r"(a) $M$ & $\mathbf{F}$")
-axs8[1].set_title(r"(b) $\nabla \cdot \mathbf{F}$ & field lines of $\mathbf{F}$")
+axs8[1].set_title(r"(b) $\nabla \cdot \mathbf{F}$ & streamlines of $\mathbf{F}$")
 
 if save:
     fig8.savefig(join(fig_save_dir, 'div_plot.png'), dpi=300)
@@ -862,34 +867,10 @@ if save:
 
 fig11, axs11 = plt.subplots(1, 2, figsize=(8, 3), constrained_layout=True)
 
-source_vol = np.nansum(np.where(Scum > 0, W, 0), axis=(1,2))
-U_vol = np.nansum(np.where(M <=0, W, np.nan), axis=(1,2))
-total_vol = np.nansum(W, axis=(1,2))
-
-axs11[0].plot(times, source_vol, color='b', ls = '--', label=r"$V(\mathcal{S})$")
-axs11[0].plot(times, U_vol, color='b', label=r"$V(\mathcal{U})$")
-axs11[0].plot(times, total_vol, color='k', label=r"Total plume volume")
-
-axs11[0].set_title("(a) Identifying QSS")
-
-axs11[0].legend()
-axs11[0].set_xlabel(r"$t$")
-
-cum_source_vol = np.nansum(np.where(S > 0, Scum, 0), axis=(1,2))
-#axs11[0].plot(times, source_vol, color='purple')
-#axs11[0].plot(times, cum_source_vol, color='orange')
-
-if len(np.argwhere(cum_source_vol[t0_idx+1:] > 2*source_vol[t0_idx+1:])) > 0:
-    t_QSS = times[t0_idx+1+np.min(np.argwhere(cum_source_vol[t0_idx+1:] > 2*source_vol[t0_idx+1:]))]
-else:
-    t_QSS = times[35]
-
-idx_QSS = get_index(times, t_QSS)
-
 total_vol = np.nansum(W, axis=(1,2))
 input_vol = np.nansum(Scum, axis=(1,2))
-axs11[1].plot(times, total_vol, color='k', label=r"Full plume")
-axs11[1].plot(times, input_vol, color='k', linestyle='dashed',
+axs11[0].plot(times, total_vol, color='k', label=r"Full plume")
+axs11[0].plot(times, input_vol, color='k', linestyle='dashed',
     label=r"Plume input")
 
 W_undiluted = np.where(M <= 0, W, np.nan)
@@ -901,37 +882,55 @@ U_vol = np.nansum(W_undiluted, axis=(1,2))
 T_vol = np.nansum(W_mixing, axis=(1,2))
 A_vol = np.nansum(W_mixed, axis=(1,2))
 
-axs11[0].set_xlim(times[0], times[-1])
-axs11[1].set_xlim(times[0], times[-1])
+source_vol = np.nansum(np.where(S > 0, W, 0), axis=(1,2))
+cum_source_vol = np.nansum(np.where(S > 0, Scum, 0), axis=(1,2))
+
+#axs11[0].plot(times, source_vol, color='purple')
+#axs11[0].plot(times, cum_source_vol, color='orange')
+
+if len(np.argwhere(cum_source_vol[t0_idx+1:] > 2*source_vol[t0_idx+1:])) > 0:
+    t_QSS = times[t0_idx+1+np.min(np.argwhere(cum_source_vol[t0_idx+1:] > 2*source_vol[t0_idx+1:]))]
+else:
+    t_QSS = times[35]
 
 axs11[0].axvline(t_QSS, color='k', linestyle=':')
 axs11[1].axvline(t_QSS, color='k', linestyle=':')
 
-axs11[1].plot(times[idx_QSS:], U_vol[idx_QSS:], color='b', label=r"$V(\mathcal{U})$")
-axs11[1].plot(times[idx_QSS:], T_vol[idx_QSS:], color='g', label=r"$V(\mathcal{T})$")
-axs11[1].plot(times[idx_QSS:], A_vol[idx_QSS:], color='r', label=r"$V(\mathcal{A})$")
+axs11[0].plot(times, U_vol, color='b', label=r"$V(\mathcal{U})$")
+axs11[0].plot(times, T_vol, color='g', label=r"$V(\mathcal{T})$")
+axs11[0].plot(times, A_vol, color='r', label=r"$V(\mathcal{A})$")
 
-axs11[1].set_xlabel(r"$t$")
-axs11[1].set_title("(b) Volume decomposition")
-axs11[1].set_ylabel("Volume")
-axs11[1].legend()
+#axs11[0].plot(times, Wc[:, 0, 0], color='brown', ls=':')
+axs11[0].plot(times, Sccum[:, 0, 0], color='brown', ls=':')
+print(Sccum[:, 0, 0])
 
-if save:
-    fig11.savefig(join(fig_save_dir, 'qss_volume.png'), dpi=300)
-    fig11.savefig(join(fig_save_dir, 'qss_volume.pdf'))
+axs11[0].set_xlabel(r"$t$")
+axs11[0].set_ylabel("Volume")
+axs11[0].legend()
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Figure 11.5: entrainment & entrainment rate
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+##########################################################################
+# Input volume test
+##########################################################################
 
-fig11, axs11 = plt.subplots(1, 2, figsize=(8, 3), constrained_layout=True)
+w_xy = np.where(b_xy > 0, w_xy, 0)
+w_xy = np.where(phi_xy > 5e-4, w_xy, 0)
+w_xy = np.where(w_xy > 0, w_xy, 0)
 
-axs11[0].axvline(t_QSS, color='k', linestyle=':')
-axs11[1].axvline(t_QSS, color='k', linestyle=':')
+input_vol_test = np.sum(w_xy, axis=(1,2))
+
+input_vol_test *= (md['LX']/md['Nx']) * (md['LY']/md['Ny']) * md['SAVE_STATS_DT']
+input_vol_test /= V
+
+#axs11[0].plot(times, input_vol, label="TEST", color='pink')
+
+##########################################################################
+
+axs11[1].plot(times, total_vol - input_vol, label=r"$E$", color='k')
 
 A_ent_vol = []
 T_ent_vol = []
 U_ent_vol = []
+AT_ent_vol = []
 sum_vol = []
 
 phi_min = 5e-4
@@ -941,131 +940,58 @@ for i in range(NSAMP):
 
     sum_vol.append(E[0])
 
-    #if times[i] >= t_QSS:
-    T_idx = np.argwhere(np.logical_and(M[i, 0, :] <= smooth_threshs[i], M[i, 0, :] > 0))
-    if len(T_idx) == 0:
-        T_ent_vol.append(0)
+    if times[i] >= t_QSS:
+        T_idx = np.argwhere(np.logical_and(M[i, 0, :] <= smooth_threshs[i], M[i, 0, :] > 0))
+        if len(T_idx) == 0:
+            T_ent_vol.append(0)
+        else:
+            T_ent_vol.append(E[np.min(T_idx)])
+        A_ent_vol.append(E[1] - T_ent_vol[-1])
+        if times[i] == t_QSS:
+            AT_ent_vol.append(E[1])
+        else:
+            AT_ent_vol.append(np.nan)
     else:
-        T_ent_vol.append(E[np.min(T_idx)])
-        print(times[i], bbins[np.min(T_idx)])
-    A_ent_vol.append(E[2] - T_ent_vol[-1])
-    U_ent_vol.append(E[0] - E[2])
+        T_ent_vol.append(np.nan)
+        A_ent_vol.append(np.nan)
+        AT_ent_vol.append(E[1])
 
-    #else:
-        #T_ent_vol.append(0)
-        #A_ent_vol.append(0)
-        #U_ent_vol.append(0)
+    U_ent_vol.append(E[0] - E[1])
+
 
 sum_vol = np.array(sum_vol)
-T_ent_vol = np.array(T_ent_vol)
-U_ent_vol = np.array(U_ent_vol)
-A_ent_vol = np.array(A_ent_vol)
 
-for i in range(1, NSAMP):
-    sum_vol[i] += sum_vol[i-1]
-    T_ent_vol[i] += T_ent_vol[i-1]
-    A_ent_vol[i] += A_ent_vol[i-1]
-    U_ent_vol[i] += U_ent_vol[i-1]
+axs11[1].plot(times, U_ent_vol, color='b', label=r"$E(\mathcal{U})$")
+axs11[1].plot(times, T_ent_vol, color='g', label=r"$E(\mathcal{T})$")
+axs11[1].plot(times, A_ent_vol, color='r', label=r"$E(\mathcal{A})$")
+axs11[1].plot(times, AT_ent_vol, color='brown', label=r"$E(\mathcal{A} \cup \mathcal{T})$")
+axs11[1].plot(times, sum_vol, color='r', linestyle='--')
 
-U_ent_rate = np.gradient(U_ent_vol, times, axis=0)/U_vol
-T_ent_rate = np.gradient(T_ent_vol, times, axis=0)/T_vol
-A_ent_rate = np.gradient(A_ent_vol, times, axis=0)/A_vol
 
-U_ent_rate_early = np.where(times <= t_QSS, U_ent_rate, np.nan)
-T_ent_rate_early = np.where(times <= t_QSS, T_ent_rate, np.nan)
-A_ent_rate_early = np.where(times <= t_QSS, A_ent_rate, np.nan)
-U_ent_rate = np.where(times < t_QSS, np.nan, U_ent_rate)
-T_ent_rate = np.where(times < t_QSS, np.nan, T_ent_rate)
-A_ent_rate = np.where(times < t_QSS, np.nan, A_ent_rate)
 
-# mask before QSS
-U_ent_vol_early = np.where(times <= t_QSS, U_ent_vol, np.nan)
-T_ent_vol_early = np.where(times <= t_QSS, T_ent_vol, np.nan)
-A_ent_vol_early = np.where(times <= t_QSS, A_ent_vol, np.nan)
-U_ent_vol = np.where(times < t_QSS, np.nan, U_ent_vol)
-T_ent_vol = np.where(times < t_QSS, np.nan, T_ent_vol)
-A_ent_vol = np.where(times < t_QSS, np.nan, A_ent_vol)
-
-axs11[0].plot(times, U_ent_vol_early, color='b', alpha = 0.4)
-axs11[0].plot(times, T_ent_vol_early, color='g', alpha = 0.4)
-axs11[0].plot(times, A_ent_vol_early, color='r', alpha = 0.4)
-
-axs11[0].plot(times, U_ent_vol, color='b', label=r"$E(\mathcal{U})$")
-axs11[0].plot(times, T_ent_vol, color='g', label=r"$E(\mathcal{T})$")
-axs11[0].plot(times, A_ent_vol, color='r', label=r"$E(\mathcal{A})$")
-
-axs11[0].plot(times, sum_vol, color='k', label=r"$E$")
-axs11[0].plot(times, total_vol - input_vol, label=r"$E$", ls='--', color='r')
-
-axs11[1].plot(times, U_ent_rate_early, color='b', alpha=0.4)
-axs11[1].plot(times, T_ent_rate_early, color='g', alpha=0.4)
-axs11[1].plot(times, A_ent_rate_early, color='r', alpha=0.4)
-
-axs11[1].plot(times, U_ent_rate, color='b', label=r"$\dot{E}(\mathcal{U})/V(\mathcal{U})$")
-axs11[1].plot(times, T_ent_rate, color='g', label=r"$\dot{E}(\mathcal{T})/V(\mathcal{T})$")
-axs11[1].plot(times, A_ent_rate, color='r', label=r"$\dot{E}(\mathcal{A})/V(\mathcal{A})$")
-#axs11[1].plot(times, sum_vol, color='r', linestyle='--')
-
-axs11[1].set_title("(b) Entrainment rate")
-axs11[1].set_ylim(0, 3)
-axs11[1].set_xlim(0, times[-1])
 axs11[1].set_xlabel(r"$t$")
-axs11[1].set_ylabel("Normalised volume flux")
+axs11[1].set_ylabel("Entrained volume")
 axs11[1].legend()
 
-axs11[0].set_title("(a) Entrained volume")
-axs11[0].set_xlim(0, times[-1])
-axs11[0].set_xlabel(r"$t$")
-axs11[0].set_ylabel("Volume")
-axs11[0].legend()
+axs11[0].set_title("(a) Volume decomposition")
+axs11[1].set_title("(b) Entrainment decomposition")
 
 if save:
-    fig11.savefig(join(fig_save_dir, 'entrainment.png'), dpi=300)
-    fig11.savefig(join(fig_save_dir, 'entrainment.pdf'))
+    fig11.savefig(join(fig_save_dir, 'vol_plot.png'), dpi=300)
+    fig11.savefig(join(fig_save_dir, 'vol_plot.pdf'))
 
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-# Figure 12: entrainment profile
-#%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+# for checking that code is calculating something reasonable...
+"""
+plt.figure()
+for i in range(30, len(times)):
+    print(F_phi_check[i])
+    plt.plot(bbins, F_phi_check[i])
+    print(F_phi[i, 0, :])
+    plt.plot(bbins, F_phi[i, 0, :])
 
-fig12, axs12 = plt.subplots(1, 2, figsize=(8, 4), constrained_layout=True)
-
-ent_vols = []
-vols = np.nansum(W[t0_idx:], axis=1)
-
-cols = plt.cm.rainbow(np.linspace(0, 1, (NSAMP-t0_idx)//4))
-for i in range(t0_idx, NSAMP):
-    E = -(boundary_flux[i, 1] - boundary_flux[i, 0])/(phi_min)
-    ent_vols.append([E[j] - E[j+1] for j in range(len(E)-1)])
-    #axs12.plot(ent_vol, 0.5*(bbins[1:] + bbins[:-1]), color=c, label=r"$t={0:.0f}$".format(times[i]))
-
-ent_vols = np.array(ent_vols)
-for i in range(1, len(ent_vols)):
-    ent_vols[i] += ent_vols[i-1]
-
-ent_vols = np.gradient(ent_vols, times[t0_idx:], axis=0)
-
-for i, c in zip(range(0, len(ent_vols), 4), cols):
-    axs12[0].plot(ent_vols[i], 0.5*(bbins[1:] + bbins[:-1]), color=c, label="$t={0:.0f}$".format(times[t0_idx+i]))
-    axs12[1].plot(ent_vols[i]/vols[i, :-1], 0.5*(bbins[1:] + bbins[:-1]), color=c,
-            label="$t={0:.0f}$".format(times[t0_idx+i]))
-
-axs12[0].set_title("(a) Entrained volume flux")
-axs12[0].set_ylabel("$b$")
-axs12[0].set_xlabel("Volume flux")
-axs12[0].set_xlim(0, 0.25)
-axs12[0].set_ylim(bbins[0]-db/2, bmax_plot)
-axs12[0].legend()
-
-axs12[1].set_title("(b) Entrainment rate")
-axs12[1].set_ylabel("$b$")
-axs12[1].set_xlabel("Normalised volume flux")
-axs12[1].set_xlim(0, 20)
-axs12[1].set_ylim(bbins[0]-db/2, bmax_plot)
-#axs12[1].legend()
-
-if save:
-    fig12.savefig(join(fig_save_dir, 'entrainment_profile.png'), dpi=300)
-    fig12.savefig(join(fig_save_dir, 'entrainment_profile.pdf'))
+    plt.xlim(bbins[0]-db/2, bmax_plot)
+    plt.show()
+"""
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Figure 12: mixing diagnostics cross sections
@@ -1232,8 +1158,8 @@ lower_cols = {
         'mixing': 'lightgreen'
         }
 lower_labels = {
-        'mixed': r'A, $\nu_{\mathrm{SGS}} = 0$',
-        'mixing': r'T, $\nu_{\mathrm{SGS}} = 0$',
+        'mixed': r'S, $\nu_{\mathrm{SGS}} = 0$',
+        'mixing': r'P, $\nu_{\mathrm{SGS}} = 0$',
         'plume': r'U, $\nu_{\mathrm{SGS}} = 0$'
         }
 upper_cols = {
@@ -1242,8 +1168,8 @@ upper_cols = {
         'mixing': 'g'
         }
 upper_labels = {
-        'mixed': r'A, $\nu_{\mathrm{SGS}} > 0$',
-        'mixing': r'T, $\nu_{\mathrm{SGS}} > 0$',
+        'mixed': r'S, $\nu_{\mathrm{SGS}} > 0$',
+        'mixing': r'P, $\nu_{\mathrm{SGS}} > 0$',
         'plume': r'U, $\nu_{\mathrm{SGS}} > 0$'
         }
 
@@ -1273,13 +1199,13 @@ axs13[1].set_xlabel(r"$\nu_{\mathrm{eff}}$")
 axs13[1].set_ylabel("PDF")
 
 lower_labels = {
-        'mixed': r'A, $\kappa_{\mathrm{SGS}} = 0$',
-        'mixing': r'T, $\kappa_{\mathrm{SGS}} = 0$',
+        'mixed': r'S, $\kappa_{\mathrm{SGS}} = 0$',
+        'mixing': r'P, $\kappa_{\mathrm{SGS}} = 0$',
         'plume': r'U, $\kappa_{\mathrm{SGS}} = 0$'
         }
 upper_labels = {
-        'mixed': r'A, $\kappa_{\mathrm{SGS}} > 0$',
-        'mixing': r'T, $\kappa_{\mathrm{SGS}} > 0$',
+        'mixed': r'S, $\kappa_{\mathrm{SGS}} > 0$',
+        'mixing': r'P, $\kappa_{\mathrm{SGS}} > 0$',
         'plume': r'U, $\kappa_{\mathrm{SGS}} > 0$'
         }
 
@@ -1345,11 +1271,11 @@ axs15[1].plot(bins_plot, plume_h/integral, color='b', label="U")
 
 mixing_h, bins = np.histogram(mixing_field.flatten(), bins=256,
         range = (N2_min, N2_max))
-axs15[1].plot(bins_plot, mixing_h/integral, color='g', label="T")
+axs15[1].plot(bins_plot, mixing_h/integral, color='g', label="P")
 
 mixed_h, bins = np.histogram(mixed_field.flatten(), bins=256,
         range = (N2_min, N2_max))
-axs15[1].plot(bins_plot, mixed_h/integral, color='r', label="A")
+axs15[1].plot(bins_plot, mixed_h/integral, color='r', label="S")
 
 
 axs15[0].set_ylim(0, 0.7)

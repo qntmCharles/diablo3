@@ -48,6 +48,12 @@ def get_metadata(run_dir, version):
                 "Q0","b_factor", "phi_factor", "Nb", "Nphi","F_TYPE", "Omega_thresh"]
         params = ["LX", "LY", "LZ", "RE", "SAVE_MOVIE_DT", "SAVE_STATS_DT",
                 "LES_DT_END", "NU_START", "NU_RUN", "SAVE_FLOW_DT", "VERSION", "NU_START_TIME"]
+    if version == "3.10":
+        chan_params = ["r0", "alpha_e", "b0", "Lyc", "Lyp", "S_depth", "N2", "H",
+                "Q0","b_factor", "phi_factor", "Nb", "Nphi","F_TYPE",
+                "alpha", "beta", "tau", "q0"]
+        params = ["LX", "LY", "LZ", "RE", "SAVE_MOVIE_DT", "SAVE_STATS_DT",
+                "LES_DT_END", "NU_START", "NU_RUN", "SAVE_FLOW_DT", "VERSION", "NU_START_TIME"]
 
     for params_file, parameters in zip(["/input.dat", "/input_chan.dat"],[params,chan_params]):
         with open(run_dir+params_file, 'r') as f:
