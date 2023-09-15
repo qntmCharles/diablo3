@@ -42,9 +42,9 @@
       b_m(j) = F0 / (r_m(j) * r_m(j) * w_m(j))
     end do
 
-    ! set relaxation timescale. Too large and forcing is too weak, too small and forcing is too strong. 
-    ! recommend testing before running!
-    !tau_sponge = 0.25d0
+    ! Relaxation timescale tau_sponge set in input_chan! 
+    ! Too large and forcing is too weak, too small and forcing is too strong. 
+    ! Recommend testing before running!
 
     ! create damping function for vertical velocity
     do j=1, Nyp
@@ -682,6 +682,7 @@ subroutine rk_chan_1
         do k = 0, twoNkz
           do i = 0, Nxp - 1
             crth(i, k, j, n) = crth(i, k, j, n) + temp3 * cfth(i, k, j, n)
+            crth_forcing(i, k, j, n) = crth_forcing(i, k, j, n)  + temp3 * cath_forcing(i, k, j, n)
           end do
         end do
       end do
@@ -693,6 +694,8 @@ subroutine rk_chan_1
       do k = 0, twoNkz
         do i = 0, Nxp - 1
           cfth(i, k, j, n) = -(nu / Pr(n)) * &
+                              (kx2(i) + kz2(k))**beta * cth(i, k, j, n)
+          cath_forcing(i, k, j, n) = -(nu / Pr(n)) * &
                               (kx2(i) + kz2(k))**beta * cth(i, k, j, n)
         end do
       end do
@@ -1079,6 +1082,7 @@ subroutine rk_chan_1
       do k = 0, twoNkz
         do i = 0, Nxp - 1
           crth(i, k, j, n) = crth(i, k, j, n) + temp5 * cfth(i, k, j, n)
+          crth_forcing(i, k, j, n) = crth_forcing(i, k, j, n) + temp5 * cath_forcing(i, k, j, n)
         end do
       end do
     end do
@@ -1086,6 +1090,7 @@ subroutine rk_chan_1
     ! Transform back to physical space
 
     call fft_xz_to_physical(crth(:, :, :, n), rth(:, :, :, n))
+    call fft_xz_to_physical(crth_forcing(:, :, :, n), rth_forcing(:, :, :, n))
 
     ! Compute the Explicit part of the Crank-Nicolson terms for the TH equation
     ! First, the vertical derivative viscous term
@@ -1093,6 +1098,9 @@ subroutine rk_chan_1
       do k = 0, Nzp - 1
         do i = 0, Nxm1
           rth(i, k, j, n) = rth(i, k, j, n) + (temp1 / Pr(n)) * ( &
+                            ((th(i, k, j + 1, n) - th(i, k, j, n)) / dy(j + 1) &
+                             - (th(i, k, j, n) - th(i, k, j - 1, n)) / dy(j)) / dyf(j))
+          rth_forcing(i, k, j, n) = rth_forcing(i, k, j, n) + 2.d0 * (temp1 / Pr(n)) * ( &
                             ((th(i, k, j + 1, n) - th(i, k, j, n)) / dy(j + 1) &
                              - (th(i, k, j, n) - th(i, k, j - 1, n)) / dy(j)) / dyf(j))
         end do
@@ -1105,6 +1113,9 @@ subroutine rk_chan_1
         do k = 0, Nzp - 1
           do i = 0, Nxm1
             rth(i, k, j, n) = rth(i, k, j, n) + temp2 * ( &
+                              (kappa_t(i, k, j + 1, n) * (th(i, k, j + 1, n) - th(i, k, j, n)) / dy(j + 1) &
+                               - kappa_t(i, k, j, n) * (th(i, k, j, n) - th(i, k, j - 1, n)) / dy(j)) / dyf(j))
+            rth_forcing(i, k, j, n) = rth_forcing(i, k, j, n) + 2.d0 * temp2 * ( &
                               (kappa_t(i, k, j + 1, n) * (th(i, k, j + 1, n) - th(i, k, j, n)) / dy(j + 1) &
                                - kappa_t(i, k, j, n) * (th(i, k, j, n) - th(i, k, j - 1, n)) / dy(j)) / dyf(j))
           end do
@@ -1363,13 +1374,13 @@ subroutine rk_chan_1
       do i = 0, Nxm1 
         if ((gyf(jpert) > Lyc + Lyp) .and. (gyf(jpert-1) < Lyc + Lyp)) then ! check we're in the right place
           call random_number(rnum)
-          u1(i,k,jpert) = u1(i,k,jpert)*(1.d0 + 2.d0*(rnum-0.5d0)/100.d0)
-          u2(i,k,jpert) = u2(i,k,jpert)*(1.d0 + 2.d0*(rnum-0.5d0)/100.d0)
-          u3(i,k,jpert) = u3(i,k,jpert)*(1.d0 + 2.d0*(rnum-0.5d0)/100.d0)
+          u1(i,k,jpert) = u1(i,k,jpert)*(1.d0 + 2.d0*(rnum-0.5d0)/10.d0)
+          u2(i,k,jpert) = u2(i,k,jpert)*(1.d0 + 2.d0*(rnum-0.5d0)/10.d0)
+          u3(i,k,jpert) = u3(i,k,jpert)*(1.d0 + 2.d0*(rnum-0.5d0)/10.d0)
           call random_number(rnum)
-          u1(i,k,jpert+1) = u1(i,k,jpert+1)*(1.d0 + 2.d0*(rnum-0.5d0)/100.d0)
-          u2(i,k,jpert+1) = u2(i,k,jpert+1)*(1.d0 + 2.d0*(rnum-0.5d0)/100.d0)
-          u3(i,k,jpert+1) = u3(i,k,jpert+1)*(1.d0 + 2.d0*(rnum-0.5d0)/100.d0)
+          u1(i,k,jpert+1) = u1(i,k,jpert+1)*(1.d0 + 2.d0*(rnum-0.5d0)/10.d0)
+          u2(i,k,jpert+1) = u2(i,k,jpert+1)*(1.d0 + 2.d0*(rnum-0.5d0)/10.d0)
+          u3(i,k,jpert+1) = u3(i,k,jpert+1)*(1.d0 + 2.d0*(rnum-0.5d0)/10.d0)
         end if
       end do
     end do
@@ -1418,7 +1429,20 @@ subroutine rk_chan_1
   call fft_xz_to_fourier(u3, cu3)
   do n = 1, N_th
     call fft_xz_to_fourier(th(:, :, :, n), cth(:, :, :, n))
+    call fft_xz_to_fourier(rth_forcing(:, :, :, n), crth_forcing(:, :, :, n))
   end do
+
+  ! Accumulate TH forcing
+  do n = 1, N_th
+  do j = jstart, jend
+    do k = 0, twoNkz
+      do i = 0, Nxp - 1
+        cth_forcing(i, k, j, n) = cth_forcing(i, k, j, n) + crth_forcing(i, k, j, n)/temp4 !(crth_forcing(i, k, j, n) / temp5)
+      end do
+    end do
+  end do
+  end do
+  crth_forcing = 0.d0
 
   ! Begin second step of the Fractional Step algorithm, making u divergence free
   ! The following subroutine projects Uhat onto divergence free space

@@ -65,15 +65,32 @@ program diablo
     if (verbosity > 2 .and. rank == 0) &
       write (*, '("Now beginning time step ", I10)') time_step
 
-    if (time_step == time_nu_run) then
+    if (first_time .and. (time_step >= time_nu_change)) then
       nu = nu_run
-      if (verbosity > 2 .and. rank == 0) write (*,*) "Now changing viscosity to ", nu_run
     end if
+
+    if (time_step == time_nu_change) then
+      nu = nu_run
+      if (verbosity > 2 .and. rank == 0) write (*,*) "Now changing viscosity to ", nu
+    end if
+
+    ! Reset forcing storage variable
+    th_forcing = 0.d0
+    cth_forcing = 0.d0
+    ath_forcing = 0.d0
+    cath_forcing = 0.d0
+    rth_forcing = 0.d0
+    crth_forcing = 0.d0
 
     do rk_step = 1, 3
       if (time_ad_meth == 1) call rk_chan_1
       if (time_ad_meth == 2) call rk_chan_2
     end do
+
+    do n = 1, N_th
+      call fft_xz_to_physical(cth_forcing(:, :, :, n), th_forcing(:, :, :, n))
+    end do
+
     time = time + delta_t
     first_time = .false.
 
@@ -91,6 +108,9 @@ program diablo
 
     ! Save statistics to an output file
     if (time >= save_stats_time) then
+
+      inquire (file="mean.h5", exist=write_bins_flag)
+      write_bins_flag = .not. write_bins_flag
 
       flag_save_LES = .true.
       if (time >= save_movie_time) then
@@ -120,6 +140,10 @@ program diablo
       call wall_time(previous_wall_time)
       previous_time_step = time_step
 
+      if (write_bins_flag) then
+        write_bins_flag = .false.
+      end if
+
     end if
 
     do n = 1, N_th
@@ -129,11 +153,17 @@ program diablo
 
     s1 = th(:,:,:,1)
     s2 = th(:,:,:,2)
+    s4 = th_forcing(:,:,:,2)
+
+    ! Update entrained flux
+    call tracer_density_cumulative_flux(s1, s2, vd_zmin, LY, Ent_phi_flux, s4)
+    Ent_phi_flux_cum = Ent_phi_flux_cum + Ent_phi_flux * dt
+
     s3 = u2(:,:,:)
 
     ! Update scatter plot flux weightings
-    call tracer_density_flux(s1, s2, s3, NyMovie, weights_flux)
-    weights_flux_cum = weights_flux_cum + weights_flux
+    call tracer_density_flux(s1, s2, s3, Nymovie, rankymovie, weights_flux)
+    weights_flux_cum = weights_flux_cum + weights_flux * dt
 
     ! Store the old scalars in th_mem
     do n = 1, N_th

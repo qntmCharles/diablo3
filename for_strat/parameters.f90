@@ -1,7 +1,7 @@
 module parameters
   use fft
   use domain
-  implicit none
+  implicit none 
   save
 
 
@@ -15,7 +15,7 @@ module parameters
   character(len=35)   flavor
   logical             use_LES
   real(rkind)         nu
-  real(rkind)         nu_run
+  real(rkind)         nu_start, nu_run
   real(rkind)         beta
   real(rkind)         delta_t, dt, delta_t_next_event, kick, ubulk0, px0
 
@@ -26,7 +26,7 @@ module parameters
   logical             variable_dt, first_time
   logical             reset_time
   real(rkind)         CFL
-  integer             update_dt, LES_start, LES_dt_end, time_nu_run
+  integer             update_dt, LES_start, time_nu_change
 
   real(rkind)         save_flow_dt, save_stats_dt
   real(rkind)         save_movie_dt
@@ -45,7 +45,7 @@ module parameters
   integer     IC_type, f_type, turb_type
   logical     physical_noise
   logical     homogeneousX
-
+  logical     check_flux
 
   ! Periodic
   real(rkind) ek0, ek, epsilon_target
@@ -78,13 +78,14 @@ module parameters
   integer Nb_out, Nphi_out
 
   real(rkind) b_factor, phi_factor
-  real(rkind) phi_min, phi_max, b_min, b_max, db, dphi
+  real(rkind) phi_min, phi_max, b_min, b_max, db, dphi, vd_zmin
 
-  real(rkind) source_vol, vol
+  real(rkind) source_vol, vol, flux_volume
 
   real(rkind), allocatable :: bbins(:), phibins(:)
   real(rkind), allocatable :: bbins_out(:), phibins_out(:)
-  real(rkind), pointer, contiguous, dimension(:,:) :: weights, weights_flux, weights_flux_cum, weights_flux_mem
+  real(rkind), pointer, contiguous, dimension(:,:) :: weights, weights_flux, weights_flux_cum, weights_flux_mem, weights_vel
+  real(rkind), pointer, contiguous, dimension(:,:) :: Ent_phi_flux_mem, Ent_phi_flux_cum, Ent_phi_flux
 
   ! HDF5 writing
   real(rkind) DiagX(0:Nxp - 1)
@@ -93,10 +94,9 @@ module parameters
 
   ! Mixing PDFs
   logical write_bins_flag
-  real(rkind) svd_thresh
+  real(rkind) pvd_thresh
   integer nbins_pdf, nbins_pdf_out
   real(rkind), allocatable :: pdf_bins(:)
-  real(rkind) chi_min, chi_max, Ri_min, Ri_max, Re_b_min, Re_b_max, e_min, e_max, BW_min, BW_max, tke_min, tke_max
 
 
 contains
@@ -117,7 +117,7 @@ contains
     !   (Note - if you change the following section of code, update the
     !    CURRENT_VERSION number to make obsolete previous input files !)
 
-    current_version = 3.8
+    current_version = 3.9
     read (11, *)
     read (11, *)
     read (11, *)
@@ -125,15 +125,16 @@ contains
     read (11, *) flavor, version
     if (version /= current_version) stop 'Wrong input data format.'
     read (11, *)
-    read (11, *) use_mpi, use_LES
+    read (11, *) use_mpi, use_LES, check_flux
     if (use_mpi .eqv. .false.) stop 'Serial processing has been deprecated in diablo3.'
     read (11, *)
     read (11, *) Re, beta, Lx, Lz, Ly
-    nu = 1.d0 / Re
+    nu_run = 1.d0 / Re
     read (11, *)
-    read (11, *) nu_run, time_nu_run
+    read (11, *) nu_start, time_nu_change
+    nu = nu_start ! initial nu, before changing to nu at time_nu_change
     read (11, *)
-    read (11, *) num_per_dir, create_new_flow, LES_start, LES_dt_end
+    read (11, *) num_per_dir, create_new_flow, LES_start
     read (11, *)
     read (11, *) wall_time_limit, time_limit, delta_t, reset_time, &
       variable_dt, CFL, update_dt
@@ -176,8 +177,7 @@ contains
       call input_chan
       call create_grid_chan
       call init_chan_mpi
-      write(*,*) "H", H
-      YcMovie = 0.95d0 * H
+      YcMovie = vd_zmin
       if (save_movie_dt /= 0) then
         call init_chan_movie
       end if
@@ -284,7 +284,7 @@ contains
     read (11, *)
     read (11, *) Nb, Nphi, b_factor, phi_factor
     read (11, *)
-    read (11, *) nbins_pdf, svd_thresh
+    read (11, *) nbins_pdf, pvd_thresh
     read (11, *)
     read (11, *)
     read (11, *) u_BC_Ymin, u_BC_Ymin_c1
@@ -306,20 +306,6 @@ contains
       read (11, *)
       read (11, *) th_BC_Ymax(n), th_BC_Ymax_c1(n)
     end do
-    ! Read in boundaries for PDFs
-    read (11, *)
-    read (11, *) chi_min, chi_max
-    read (11, *)
-    read (11, *) Ri_min, Ri_max
-    read (11, *)
-    read (11, *) Re_b_min, Re_b_max
-    read (11, *)
-    read (11, *) e_min, e_max
-    read (11, *)
-    read (11, *) BW_min, BW_max
-    read (11, *)
-    read (11, *) tke_min, tke_max
-
 
     if (rank == 0) write (*, '("Ro Inverse = " ES26.18)') Ro_inv
     do n = 1, N_th
@@ -340,19 +326,29 @@ contains
     db = (b_max - b_min) / Nb
     dphi = (phi_max - phi_min) / Nphi
 
+    vd_zmin = H - (F0**(0.25d0)) * (N2**(-0.375d0))
+    write (*, *) "vd zmin", vd_zmin
+    
     Nb_out = int(ceiling(real(Nb)/NprocZ) * NprocZ)
     Nphi_out = int(ceiling(real(Nphi)/NprocZ) * NprocZ)
    
     allocate (bbins(1:Nb))
     allocate (phibins(1:Nphi))
+
+    allocate (Ent_phi_flux(1:Nb_out, 1:Nphi_out))
+    allocate (Ent_phi_flux_mem(1:Nb_out, 1:Nphi_out))
+    allocate (Ent_phi_flux_cum(1:Nb_out, 1:Nphi_out))
+
     allocate (bbins_out(1:Nb_out))
     allocate (phibins_out(1:Nphi_out))
     allocate (weights(1:Nb, 1:Nphi))
+    allocate (weights_vel(1:Nb, 1:Nphi))
     allocate (weights_flux(1:Nb, 1:Nphi))
     allocate (weights_flux_cum(1:Nb, 1:Nphi))
     allocate (weights_flux_mem(1:Nb, 1:Nphi))
 
     weights_flux_mem = 0.d0
+    Ent_phi_flux_mem = 0.d0
 
     do i = 1, Nb
       bbins(i) = b_min + (i-0.5d0)*db
