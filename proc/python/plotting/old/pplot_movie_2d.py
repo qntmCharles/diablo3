@@ -1,3 +1,5 @@
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0],".."))
 # Script loads in 2D slices and produces a movie of the simulation output import numpy as np import h5py, gc
 import h5py
 import numpy as np

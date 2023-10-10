@@ -33,18 +33,21 @@ with h5py.File(save_dir+"/movie.h5", 'r') as f:
     time_keys = list(f['th1_xy'])
     print(time_keys)
     # Get buoyancy data
-    th1_xy = np.array([np.array(f['th2_xz'][t]) for t in time_keys])
-    th1_zy = np.array([np.array(f['th3_xz'][t]) for t in time_keys])
+    th1_xy = np.array([np.array(f['u_xz'][t]) for t in time_keys])
+    th1_zy = np.array([np.array(f['th2_xz'][t]) for t in time_keys])
 
     #th1_xy = np.array([np.array(f['chi1_xz'][t]) for t in time_keys])
     #th1_zy = np.array([np.array(f['diapycvel1_xz'][t]) for t in time_keys])
 
-    th1_xy = g2gf_1d(md, th1_xy)
-    th1_zy = g2gf_1d(md, th1_zy)
+    #th1_xy = g2gf_1d(md, th1_xy)
+    #th1_zy = g2gf_1d(md, th1_zy)
 
     NSAMP = len(th1_xy)
     times = np.array([float(f['th1_xz'][tstep].attrs['Time']) for tstep in time_keys])
     f.close()
+
+print(th1_xy[:, -1, 20])
+print(th1_xy[:, -2, 20])
 
 #th1_xy -= th1_xy[0]
 print("Total time steps: %s"%NSAMP)
@@ -79,9 +82,9 @@ print(t_max)
 #ims[0].set_clim(0, .5*md['N2']*(md['LY']-md['H']))
 #ims[1].set_clim(0, 2*md['phi_factor']*t_max)
 ims[0].set_clim(0, 0.03)
-ims[1].set_clim(0, 0.001)
+ims[1].set_clim(0, 0.03)
 
-fig.suptitle("$\\theta_1$, time = 0 secs")
+fig.suptitle("time = 0 secs")
 axs[0].set_ylabel("$z$")
 axs[1].set_ylabel("$z$")
 axs[0].set_xlabel("$x$")
@@ -96,10 +99,13 @@ axs[1].set_ylim(0, 3*md['H'])
 axs[0].set_aspect(1)
 axs[1].set_aspect(1)
 
+axs[0].set_title(r"$u$")
+axs[1].set_title(r"$\phi$")
+
 def animate(step):
     ims[0].set_array(th1_xy[step].ravel())
     ims[1].set_array(th1_zy[step].ravel())
-    fig.suptitle("$\\theta_1$, time = {0:.2f} secs".format(times[step]))
+    fig.suptitle("time = {0:.2f} secs".format(times[step]))
 
     return ims.flatten(),
 
@@ -110,5 +116,5 @@ writer = Writer(fps=20, bitrate=1800)
 print("Starting plot...")
 anim = animation.FuncAnimation(fig, animate, interval=500, frames=NSAMP)
 now = datetime.now()
-#anim.save(save_dir+'jet_%s.mp4'%now.strftime("%d-%m-%Y-%H-%m"),writer=writer)
+anim.save(save_dir+'shear_%s.mp4'%now.strftime("%d-%m-%Y"),writer=writer)
 plt.show()

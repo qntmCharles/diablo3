@@ -1,6 +1,6 @@
 import sys, os
 sys.path.insert(1, os.path.join(sys.path[0],".."))
-import h5py, cv2
+import h5py
 import numpy as np
 from matplotlib import pyplot as plt
 import matplotlib.animation as animation
