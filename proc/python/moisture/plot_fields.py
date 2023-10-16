@@ -33,7 +33,7 @@ with h5py.File(save_dir+"/movie.h5", 'r') as f:
     time_keys = list(f['th1_xy'])
     print(time_keys)
     # Get buoyancy data
-    th1_xy = np.array([np.array(f['u_xz'][t]) for t in time_keys])
+    th1_xy = np.array([np.array(f['th3_xz'][t]) for t in time_keys])
     th1_zy = np.array([np.array(f['th2_xz'][t]) for t in time_keys])
 
     #th1_xy = np.array([np.array(f['chi1_xz'][t]) for t in time_keys])

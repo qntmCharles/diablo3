@@ -132,7 +132,7 @@ print("Starting plot...")
 anim = animation.FuncAnimation(fig, animate, interval=250, frames=NSAMP)
 
 now = datetime.now()
-#anim.save(save_dir+'fountain_w_%s.mp4'%now.strftime("%Y-%m-%d:%H"),writer=writer, dpi=300)
+anim.save(save_dir+'waves_%s.mp4'%now.strftime("%Y-%m-%d"),writer=writer, dpi=300)
 
 ##### Plot vertical profile of N^2 #####
 # Low-pass filter on w_xz

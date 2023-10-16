@@ -752,7 +752,6 @@ plt.ylim(-2, 6)
 plt.box(False)
 plt.tight_layout()
 plt.savefig('/home/cwp29/Documents/papers/conv_pen/draft2/ga.jpg', dpi=300, bbox_inches='tight', pad_inches=0)
-plt.show()
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Figure 9: calculating threshold for M
