@@ -1,10 +1,13 @@
+import sys, os
+sys.path.insert(1, os.path.join(sys.path[0],".."))
 import h5py, os
 import numpy as np
+from os.path import join
 from matplotlib import pyplot as plt
 from matplotlib import cm as cm
 import matplotlib.animation as animation
 from datetime import datetime
-from functions import get_metadata, read_params, get_grid, g2gf_1d
+from functions import get_metadata, read_params, get_grid, g2gf_1d, get_az_data
 
 ##### USER DEFINED VARIABLES #####
 
@@ -58,13 +61,13 @@ else:
         b_plot = np.swapaxes(np.array(f['th1_xz'][time_keys[1]]), 0, 1)
         b_plot = g2gf_1d(md, b_plot)
 
-nplots=2
+nplots=20
 cols = plt.cm.rainbow(np.linspace(0,1,nplots))
 
 fig, ax = plt.subplots(1,2)
-for i,c in zip(range(nplots),cols):
-    ax[0].plot(w_plot[:,i+1], linestyle='--',color=c)
-    ax[1].plot(b_plot[:,i+1], linestyle='--',color=c)
+#for i,c in zip(range(nplots),cols):
+    #ax[0].plot(w_plot[:,i+1], linestyle='--',color=c)
+    #ax[1].plot(b_plot[:,i+1], linestyle='--',color=c)
 
 r_0 = md['r0']
 alpha = md['alpha_e']
@@ -98,15 +101,27 @@ w_forcing = np.zeros(shape=(md['Nx'],md['Ny'],md['Nz']))
 
 x, y, z = np.meshgrid(gxf, gyf, gzf, indexing='ij', sparse=True)
 
+data = get_az_data(join(save_dir,'az_stats.h5'), md, tstart_ind = 6*4, verbose=False)
+wbar = data['w']
+bbar = data['b']
+tbar = data['th']
+
+
 for j in range(md['Nz']):
-    w_forcing[:,:,j] = w_m[j]*np.exp(-((x[:,:,0]-md['LX']/2)**2 + (y[:,:,0]-md['LY']/2)**2)/(2*r_m[j]**2)) \
+    w_forcing[:,:,j] = 2*w_m[j]*np.exp(-2*((x[:,:,0]-md['LX']/2)**2 + (y[:,:,0]-md['LY']/2)**2)/r_m[j]**2) \
             * (1 - np.tanh((z[:,:,j]-Lyc)/Lyp))/2
-    b_forcing[:,:,j] = b_m[j]*np.exp(-((x[:,:,0]-md['LX']/2)**2 + (y[:,:,0]-md['LY']/2)**2)/(2*r_m[j]**2)) \
+    b_forcing[:,:,j] = 2*b_m[j]*np.exp(-2*((x[:,:,0]-md['LX']/2)**2 + (y[:,:,0]-md['LY']/2)**2)/r_m[j]**2) \
             * (1 - np.tanh((z[:,:,j]-Lyc)/Lyp))/2
+
+print(wbar.shape)
+wfull = np.concatenate((np.flip(wbar, axis=1), wbar), axis=1)
+bfull = np.concatenate((np.flip(bbar, axis=1), bbar), axis=1)
 
 for i,c in zip(range(nplots),cols):
     ax[0].plot(w_forcing[:,int(md['Ny']/2),i],color=c)
     ax[1].plot(b_forcing[:,int(md['Ny']/2),i],color=c)
+    ax[0].plot(wfull[i], color=c, linestyle=':')
+    ax[1].plot(bfull[i], color=c, linestyle=':')
 
 ax[0].set_title("w")
 ax[0].set_xlabel("x")

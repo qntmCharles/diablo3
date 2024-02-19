@@ -39,27 +39,25 @@ def ranges(nums):
     edges = iter(nums[:1] + sum(gaps, []) + nums[-1:])
     return list(zip(edges, edges))
 
-def truncate(var, points, ref_var, ref, trunc_indices, display=False):
+def truncate(var, points, ref_var, ref, trunc_indices):
     # Truncates var at location where ref_var matches ref, computing only at trunc_indices
     # ASSUMES ref_var is decreasing with increasing index
     # Points are the positions of each entry of var
     var_new = np.zeros(shape=(var.shape[0], var.shape[1]+2))
     for i in trunc_indices:
         # Calculate index up to which var is unchanged, after which set to 0
-        trunc_idx = ranges(np.where(ref_var[i,:] > ref[i])[0])[0][-1]
+        trunc_idx = max(np.where(ref_var[i,:] > ref[i])[0])
         var_new[i, :trunc_idx+1] = var[i, :trunc_idx+1]
 
         # Calculate exact point to interpolate
-        ref_var_interp = ref_var[i, trunc_idx:trunc_idx+2]
-        points_interp = points[trunc_idx:trunc_idx+2]
-        f = interpolate.interp1d(ref_var_interp, points_interp)
-        trunc_pt = f(ref[i])
+        f = interpolate.interp1d(ref_var[i], points)
+        if ref[i] < np.min(ref_var[i]):
+            trunc_pt = f(np.min(ref_var[i]))
+        else:
+            trunc_pt = f(ref[i])
 
         # Create interpolation function for var
-        points_interp = points[trunc_idx:trunc_idx+2]
-        var_interp = var[i,trunc_idx:trunc_idx+2]
-
-        f = interpolate.interp1d(points_interp, var_interp)
+        f = interpolate.interp1d(points, var[i])
         var_new[i, trunc_idx+1] = f(trunc_pt)
 
     return var_new
@@ -104,11 +102,13 @@ vbar = data['v']
 wbar = data['w']
 bbar = data['b']
 pbar = data['p']
+phibar = data['th']
 
 ufluc2bar = data['ufluc2']
 uflucvflucbar = data['uflucvfluc']
 uflucwflucbar = data['uflucwfluc']
 uflucbflucbar = data['uflucbfluc']
+uflucphiflucbar = data['uflucphifluc']
 vfluc2bar = data['vfluc2']
 vflucwflucbar = data['vflucwfluc']
 wfluc2bar = data['wfluc2']
@@ -400,6 +400,31 @@ sm = plt.cm.ScalarMappable(cmap='rainbow',
         norm=plt.Normalize(vmin=np.min(gzf[plume_indices])/r_0,vmax=np.max(gzf[plume_indices])/r_0))
 
 ##### ----------------------- #####
+
+dr_m = np.zeros(shape=(md['Nz']))
+dw_m = np.zeros(shape=(md['Nz']))
+db_m = np.zeros(shape=(md['Nz']))
+
+#F_0 = md['b0']*r_0*r_0
+F_0 = compute_F0(save_dir, md, tstart_ind = tstart_idx, verbose=False)
+alphae = md['alpha_e']
+zvirt = -r_0 / (1.2 * alphae)
+for j in range(md['Nz']):
+    dr_m[j] = 1.2 * alphae * (gzf[j]-zvirt)
+    dw_m[j] = (0.9 * alphae * F_0)**(1/3) * (gzf[j] - zvirt)**(2/3) / dr_m[j]
+    db_m[j] = F_0/(dr_m[j]**2 * dw_m[j])
+
+fig, ax = plt.subplots(1,3)
+ax[0].plot(dr_m, gzf, linestyle=':', color='b')
+ax[0].plot(r_m, gzf, color='b')
+ax[1].plot(dw_m, gzf, linestyle=':', color='b')
+ax[1].plot(w_m, gzf, color='b')
+ax[2].plot(db_m, gzf, linestyle=':', color='b')
+ax[2].plot(b_m, gzf, color='b')
+
+plt.show()
+
+##### ----------------------- #####
 factor = 0.6
 
 fig0, axs = plt.subplots(1,3,figsize=(width, width*4/10))
@@ -408,13 +433,15 @@ axs[0].plot(Q, factor*gzf/r_0, label="Thresholded", color='b', linestyle='--')
 axs[1].plot(M, factor*gzf/r_0, label="Thresholded", color='b', linestyle='--')
 axs[2].plot(F, factor*gzf/r_0, label="Thresholded", color='b', linestyle='--')
 
-analytic_Q = lambda z,a,z0: a*(z-z0)**(5/3)
-analytic_M = lambda z,a,z0: a*(z-z0)**(4/3)
+#TODO change this to just estimate zvirt
+analytic_Q = lambda z,a,z0: a*np.power(z-z0, 5/3)
+analytic_M = lambda z,a,z0: a*np.power(z-z0, 4/3)
 analytic_F = lambda z,a: a
 
 poptQ, _ = optimize.curve_fit(analytic_Q, gzf[plume_indices], Q[plume_indices])
 poptM, _ = optimize.curve_fit(analytic_M, gzf[plume_indices], M[plume_indices])
 poptF, _ = optimize.curve_fit(analytic_F, gzf[plume_indices], F[plume_indices])
+print(poptQ, poptM, poptF)
 
 try:
     axs[0].plot(poptQ[0]*np.power(gzf-poptQ[1],5/3), factor*gzf/r_0, color='r')
@@ -428,6 +455,12 @@ try:
     axs[2].axvline(poptF[0], color='r')
 except:
     print("Fitting F failed.")
+
+axs[0].plot(1.2*alpha_p * np.power(0.9*alpha_p*poptF[0], 1/3) * np.power(gzf - z_virt, 5/3),
+        factor*gzf/r_0, color='r', linestyle=':')
+axs[1].plot(np.power(0.9*alpha_p*poptF[0], 2/3) * np.power(gzf - z_virt, 4/3),
+        factor*gzf/r_0, color='r', linestyle=':')
+
 
 axs[0].axhline(factor*z_upper, color='grey', linestyle='--')
 axs[0].axhline(factor*z_lower, color='grey', linestyle='--')
@@ -630,6 +663,8 @@ for i in plume_indices:
     if i == plume_indices[0]:
         axs2[0].plot(r_points/r_m[i], wbar[i]/w_m[i],color='blue',label="$\overline{w}/w_m$")
         axs2[0].plot(r_points/r_m[i], bbar[i]/b_m[i],color='red',linestyle='dashed',label="$\overline{b}/b_m$")
+        axs2[0].plot(r_points/r_m[i], phibar[i]/b_m[i],color='green',linestyle='dotted',
+                label=r"$\overline{\phi}/b_m$")
         axs2[1].plot(r_points/r_m[i], uflucwflucbar[i]/(w_m[i]*w_m[i]), color='blue',
                 label="$\overline{u'w'}/w_m^2$")
         axs2[1].plot(r_points/r_m[i], uflucbflucbar[i]/(w_m[i]*b_m[i]), color='red',
@@ -637,8 +672,10 @@ for i in plume_indices:
     else:
         axs2[0].plot(r_points/r_m[i], wbar[i]/w_m[i],color='blue')
         axs2[0].plot(r_points/r_m[i], bbar[i]/b_m[i],color='red',linestyle='dashed')
+        axs2[0].plot(r_points/r_m[i], phibar[i]/b_m[i],color='green',linestyle='dotted')
         axs2[1].plot(r_points/r_m[i], uflucwflucbar[i]/(w_m[i]*w_m[i]), color='blue')
         axs2[1].plot(r_points/r_m[i], uflucbflucbar[i]/(w_m[i]*b_m[i]), color='red', linestyle='dashed')
+        axs2[1].plot(r_points/r_m[i], uflucphiflucbar[i]/(w_m[i]*b_m[i]), color='green', linestyle='dotted')
 
 axs2[0].set_xlim(0, 2)
 axs2[0].set_xlabel("$r/r_m$")
@@ -693,6 +730,8 @@ for i,c in zip(plume_indices,cols):
         axs23[0,1].plot(r_points/r_m[i], uflucwflucbar[i]/(w_m[i]*w_m[i]), color='blue')
         axs23[0,1].plot(r_points/r_m[i], uflucbflucbar[i]/(w_m[i]*b_m[i]), color='red', linestyle='dashed')
 
+    axs23[0,0].plot(r_points/r_m[plume_indices[0]], 2*np.exp(-2*(r_points/r_m[plume_indices[0]])**2), color='k')
+
     axs23[1,0].plot(r_points/r_m[i], ubar[i]/w_m[i],color='blue')
     axs23[1,1].plot(r_points/r_m[i], r_points*ubar[i]/(r_m[i]*w_m[i]), color='blue')
 
@@ -732,8 +771,8 @@ fig23.subplots_adjust(right=0.9)
 #fig23.colorbar(sm, cax=cbar_ax, label="$z/r_0$")
 #cbar = fig23.colorbar(sm, ax=axs23.ravel().tolist(), shrink=0.95, label="$z/r_0$")
 #fig23.colorbar(sm, cax = cax,label="$z/r_0$")
-fig23.savefig('/home/cwp29/Documents/papers/draft/figs/mvr.png', dpi=300)
-fig23.savefig('/home/cwp29/Documents/papers/draft/figs/mvr.pdf')
+#fig23.savefig('/home/cwp29/Documents/papers/draft/figs/mvr.png', dpi=300)
+#fig23.savefig('/home/cwp29/Documents/papers/draft/figs/mvr.pdf')
 if save: fig23.savefig(save_loc+'fig23.png', dpi=300)
 
 ##### ----------------------- #####

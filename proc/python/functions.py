@@ -139,6 +139,7 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
         uv_sfluc = f['uv_sfluc']
         uw_sfluc = f['uw_sfluc']
         ub_sfluc = f['ub_sfluc']
+        uphi_sfluc = f['uth_sfluc']
         vv_sfluc = f['vv_sfluc']
         vw_sfluc = f['vw_sfluc']
         ww_sfluc = f['ww_sfluc']
@@ -170,6 +171,7 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
         uv_sfluc_bar = uv_sfluc[time_keys[0]][()]*md['SAVE_STATS_DT']
         uw_sfluc_bar = uw_sfluc[time_keys[0]][()]*md['SAVE_STATS_DT']
         ub_sfluc_bar = ub_sfluc[time_keys[0]][()]*md['SAVE_STATS_DT']
+        uphi_sfluc_bar = uphi_sfluc[time_keys[0]][()]*md['SAVE_STATS_DT']
         vv_sfluc_bar = vv_sfluc[time_keys[0]][()]*md['SAVE_STATS_DT']
         vw_sfluc_bar = vw_sfluc[time_keys[0]][()]*md['SAVE_STATS_DT']
         ww_sfluc_bar = ww_sfluc[time_keys[0]][()]*md['SAVE_STATS_DT']
@@ -193,6 +195,7 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
             uv_sfluc_bar += uv_sfluc[t_key][()]*dt
             uw_sfluc_bar += uw_sfluc[t_key][()]*dt
             ub_sfluc_bar += ub_sfluc[t_key][()]*dt
+            uphi_sfluc_bar += uphi_sfluc[t_key][()]*dt
             vv_sfluc_bar += vv_sfluc[t_key][()]*dt
             vw_sfluc_bar += vw_sfluc[t_key][()]*dt
             ww_sfluc_bar += ww_sfluc[t_key][()]*dt
@@ -217,6 +220,7 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
         uv_sfluc_bar /= t_run
         uw_sfluc_bar /= t_run
         ub_sfluc_bar /= t_run
+        uphi_sfluc_bar /= t_run
         vv_sfluc_bar /= t_run
         vw_sfluc_bar /= t_run
         ww_sfluc_bar /= t_run
@@ -230,11 +234,13 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
         v_tfluc = v_az[time_keys[0]][()] - vbar
         w_tfluc = w_az[time_keys[0]][()] - wbar
         b_tfluc = b_az[time_keys[0]][()] - bbar
+        phi_tfluc = th_az[time_keys[0]][()] - thbar
 
         uu_tfluc_bar = u_tfluc*u_tfluc*md['SAVE_STATS_DT']
         uv_tfluc_bar = u_tfluc*v_tfluc*md['SAVE_STATS_DT']
         uw_tfluc_bar = u_tfluc*w_tfluc*md['SAVE_STATS_DT']
         ub_tfluc_bar = u_tfluc*b_tfluc*md['SAVE_STATS_DT']
+        uphi_tfluc_bar = u_tfluc*phi_tfluc*md['SAVE_STATS_DT']
         vv_tfluc_bar = v_tfluc*v_tfluc*md['SAVE_STATS_DT']
         vw_tfluc_bar = v_tfluc*w_tfluc*md['SAVE_STATS_DT']
         ww_tfluc_bar = w_tfluc*w_tfluc*md['SAVE_STATS_DT']
@@ -251,11 +257,13 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
             v_tfluc = v_az[t_key][()] - vbar
             w_tfluc = w_az[t_key][()] - wbar
             b_tfluc = b_az[t_key][()] - bbar
+            phi_tfluc = th_az[t_key][()] - bbar
 
             uu_tfluc_bar += u_tfluc*u_tfluc*dt
             uv_tfluc_bar += u_tfluc*v_tfluc*dt
             uw_tfluc_bar += u_tfluc*w_tfluc*dt
             ub_tfluc_bar += u_tfluc*b_tfluc*dt
+            uphi_tfluc_bar += u_tfluc*phi_tfluc*dt
             vv_tfluc_bar += v_tfluc*v_tfluc*dt
             vw_tfluc_bar += v_tfluc*w_tfluc*dt
             ww_tfluc_bar += w_tfluc*w_tfluc*dt
@@ -266,6 +274,7 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
         uv_tfluc_bar /= t_run
         uw_tfluc_bar /= t_run
         ub_tfluc_bar /= t_run
+        uphi_tfluc_bar /= t_run
         vv_tfluc_bar /= t_run
         vw_tfluc_bar /= t_run
         ww_tfluc_bar /= t_run
@@ -281,11 +290,13 @@ def get_az_data(data_file, md, tstart_ind=0, verbose=True):
         wfluc2bar = ww_sfluc_bar + ww_tfluc_bar
         wflucbflucbar = wb_sfluc_bar+wb_tfluc_bar
         bfluc2bar = bb_sfluc_bar+bb_tfluc_bar
+        uflucphiflucbar = uphi_sfluc_bar + uphi_tfluc_bar
 
         data_dict['ufluc2'] = ufluc2bar
         data_dict['uflucvfluc'] = uflucvflucbar
         data_dict['uflucwfluc'] = uflucwflucbar
         data_dict['uflucbfluc'] = uflucbflucbar
+        data_dict['uflucphifluc'] = uflucphiflucbar
         data_dict['vfluc2'] = vfluc2bar
         data_dict['vflucwfluc'] = vflucwflucbar
         data_dict['wfluc2'] = wfluc2bar
