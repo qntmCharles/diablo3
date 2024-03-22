@@ -20,7 +20,7 @@ from scipy import integrate, ndimage, spatial
 
 params_file = "./params.dat"
 
-save = False
+save = True
 show = not save
 
 fig_save_dir = '/home/cwp29/Documents/papers/conv_pen/draft3/figs'
@@ -62,12 +62,9 @@ with h5py.File(join(save_dir, 'movie.h5'), 'r') as f:
     F_b = np.array([np.array(f['td_vel_1'][t]) for t in time_keys])
     F_phi = np.array([np.array(f['td_vel_2'][t]) for t in time_keys])
 
-    Ent = np.copy(F_phi)
-
     M = np.array([np.array(f['pvd'][t]) for t in time_keys])
     boundary_flux = np.array([np.array(f['Ent_phi_flux_int'][t]) for t in time_keys])
     boundary_F_int = np.array([np.array(f['boundary_F_int'][t]) for t in time_keys])
-    boundary_F = np.array([np.array(f['Fphi_boundary'][t]) for t in time_keys])
 
     Re_b = np.array([np.array(f['Re_b_xz'][t]) for t in time_keys])
     eps = np.array([np.array(f['tked_xz'][t]) for t in time_keys])
@@ -223,7 +220,7 @@ aspect = factor*bmax_plot/phimax_plot
 
 #####
 
-steps = [16, 32, -1]
+steps = [13, 36, -5]
 labels = ["a", "b", "c", "d", "e", "f", "g", "h"]
 
 tracer_thresh = 1e-2#5e-3 #7e-4/phi0
@@ -313,20 +310,23 @@ Scum = np.where(Scum == 0, np.NaN, Scum)
 S_bounds = np.linspace(-0.05,  0.05, 9)
 S_norm = colors.BoundaryNorm(boundaries=S_bounds, ncolors=256)
 
-dbdphi = 19.34
+dbdphi = 13.27
 b_s = bbins[0]+db/2
 phi_s = phibins[0]-dphi/2
+print(dbdphi, T*T/(np.power(md['b0']*md['r0']*md['r0'], 1/4) * np.power(N, -3/4)))
 
 M_nobulge = np.where(np.logical_and(sxf < b_s + dbdphi * (syf-phi_s), M > 0), np.nan, M)
 W_nobulge = np.where(np.logical_and(sxf < b_s + dbdphi * (syf-phi_s), M > 0), np.nan, W)
 Fb_nobulge = np.where(np.logical_and(sxf < b_s + dbdphi * (syf-phi_s), M > 0), np.nan, F_b)
 Fphi_nobulge = np.where(np.logical_and(sxf < b_s + dbdphi * (syf-phi_s), M > 0), np.nan, F_phi)
 
+print("Gibbs errors: ", np.nansum(W_nobulge[get_index(10, times)])/np.nansum(W[get_index(10, times)]))
+
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Figure 2: plume cross-section
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-fig2, axs2 = plt.subplots(1,3,figsize=(8, 3.5), constrained_layout=True)
+fig2, axs2 = plt.subplots(1,3,figsize=(8, 3), constrained_layout=True)
 
 for i in range(len(steps)):
     im_env = axs2[i].contour(Xf, Yf, plot_env[steps[i]], levels=contours_b, cmap='cool', alpha=0.8)
@@ -357,11 +357,11 @@ for i in range(len(steps)):
         axs2[i].set_ylabel("$z$")
 
     axs2[i].set_xlim(-x_max, x_max)
-    axs2[i].set_ylim(np.min(Y), 9)
+    axs2[i].set_ylim(np.min(Y), 6)
 
     axs2[i].set_xlabel("$x$")
 
-    axs2[i].set_title("({0}) t = {1:.0f}".format(labels[i], times[steps[i]]))
+    axs2[i].set_title("({0}) t = {1:.2f}".format(labels[i], times[steps[i]]))
 
 if save:
     fig2.savefig(join(fig_save_dir, 'evolution.png'), dpi=300)
@@ -371,7 +371,7 @@ if save:
 # Figure 3: tracer concentration cross-section
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-fig3 = plt.figure(figsize=(8, 4))
+fig3 = plt.figure(figsize=(8, 3))
 
 X_v, Y_v = np.meshgrid(times[:]+md['SAVE_STATS_DT']/2, gz)
 Xf_v, Yf_v = np.meshgrid(0.5*(times[1:]+times[:-1]), gzf)
@@ -407,7 +407,7 @@ for i in range(len(plume_full)):
 zmax = np.max(heights[:15 * 4])
 print("Maximum penetration height: ", zmax)
 print("at time: ", times[heights.index(zmax)])
-zss = np.mean(heights[3 * 4:15 * 4])
+zss = np.mean(heights[6 * 4:15 * 4])
 
 #plt.plot(0.5*(times[1:]+times[:-1]), heights, color='w', linestyle=':')
 
@@ -437,12 +437,12 @@ if save:
 fig4_a = plt.figure()
 
 # Compute time indices
-t_inds = list(range(24, NSAMP, 8))
+t_inds = list(range(t0_idx+8, NSAMP, 8))
 nplot = len(t_inds)
 
 # Source tracer vs. buoyancy distribution: calculation and diagnostics
-tstart = 5 # 5
-tend = 10 # 10
+tstart = 5
+tend = 10
 
 start_idx = get_index(tstart, times)
 end_idx = get_index(tend, times)
@@ -459,42 +459,43 @@ source_dist = np.mean(source_dists_avg, axis=0)
 plt.plot(bbins_plot, source_dist, color='k')
 plt.legend()
 
-plt.ylabel(r"$\tilde{{\phi}}(b; t, \delta b = {0:.2f})$".format(bbins_file[1]-bbins_file[0]))
-plt.xlabel("Buoyancy")
+plt.ylabel(r"$\tilde{{\phi}}(b; t)$")
+plt.xlabel(r"$b$")
 
 # Tracer vs. buoyancy distribution plots
 tracer_total = total_tracer/(phi0*V)
 print(total_tracer)
-tracer_total /= md['LY']*md['LX']*(md['LZ']-md['H'])
+#tracer_total /= md['LY']*md['LX']*(md['LZ']-md['H'])
 
 tcols = plt.cm.viridis(np.linspace(0,1,nplot))
 
-fig4, ax4 = plt.subplots(figsize=(6,4))
+fig4, ax4 = plt.subplots(figsize=(8,3.5))
 
-ax4_inset = ax4.inset_axes([0.55, 0.5, 0.4, 0.45])
+ax4_inset = ax4.inset_axes([0.58, 0.55, 0.4, 0.4])
 ax4_inset.plot(times, tracer_total,color='k')
 ax4_inset.set_xlim(times[0], times[-1])
 ax4_inset.set_ylim(0, tracer_total[-1])
 ax4_inset.set_ylabel(r"$\phi_T(t)$")
 ax4_inset.set_xlabel("t")
 
-ax4.plot(bbins_plot[1:], source_dist[1:], color='k', linestyle='--', label="pre-penetration")
+ax4.plot(bbins_plot[1:], source_dist[1:], color='k', linestyle='--', label=r"$\tilde{\phi}_0(b)$")
 
 for step,c in zip(t_inds, tcols):
     ax4.plot(bbins_plot, strat_dists[step,:-1]/np.nansum(strat_dists[step]), color=c,
             label = "t={0:.0f}".format(times[step]))
 
 ax4.set_xlabel("$b$")
-ax4.set_ylabel(r"$\tilde{{\phi}}(b; t, \delta b = {0:.3f})$".format((bbins_file[1]-bbins_file[0])/2))
+ax4.set_ylabel(r"PDF $\tilde{{\phi}}(b; t)$")
 ax4.set_xlim(0, bmax_plot)
 ax4.set_ylim(0, 0.08)
 
 plt.tight_layout()
 
-box = ax4.get_position()
-ax4.set_position([box.x0, box.y0 + box.height * 0.1,
-                    box.width, box.height * 0.85])
-ax4.legend(loc='upper center', bbox_to_anchor=(0.45, -0.13), ncol=int((nplot+1) / 2)+2)
+#box = ax4.get_position()
+#ax4.set_position([box.x0, box.y0 + box.height * 0.1,
+                    #box.width, box.height * 0.85])
+#ax4.legend(loc='upper center', bbox_to_anchor=(0.45, -0.13), ncol=int((nplot+1) / 2)+2)
+ax4.legend(loc='lower right', ncol=2)
 
 if save:
     fig4.savefig(join(fig_save_dir, 'tb_dist.png'), dpi=300)
@@ -542,13 +543,11 @@ ax5[1].set_ylim((hmap_plot_min-md['H'])/L, (hmap_plot_max-md['H'])/L)
 
 bt_cont = ax5[0].contour(Tbf, Bf, bt_pdfs_int, levels=[0.99], colors='r', alpha=0.7)
 bt_cbar = plt.colorbar(bt_im, ax=ax5[1], label=r"$\phi(b)$ (left) and $\phi(z)$ (right)", shrink=0.7)
-#bt_cbar.add_lines(bt_cont)
 
 zt_cont = ax5[1].contour(Tzf, Zf, zt_pdfs_int, levels=[0.99], colors='r', alpha=0.7)
 zt_cbar = plt.colorbar(zt_im, ax=ax5[1], label="tracer conc.", shrink=0.7)
 zt_cbar.remove()
 zt_cbar.mappable.set_clim(*bt_cbar.mappable.get_clim())
-#zt_cbar.add_lines(zt_cont)
 
 ax5[1].axhline(zmax, color='white', linewidth=1)
 ax5[1].text(1.0, zmax + .2, r"$z_{\max}$", fontsize='large', color='w')
@@ -577,7 +576,7 @@ if save:
 # Figure 6: volume distribution W and source S evolution
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-fig6, axs = plt.subplots(3,3,figsize=(10, 6), constrained_layout=True)
+fig6, axs = plt.subplots(3,3,figsize=(8, 5.4), constrained_layout=True)
 
 for d in range(len(steps)):
     im_b_edge = axs[0, d].contour(Xf, Yf, plot_env[steps[d]], levels = contours_b_short, cmap='cool', alpha=0.8)
@@ -586,12 +585,12 @@ for d in range(len(steps)):
     im_W = axs[1,d].pcolormesh(sx, sy, W_nobulge[steps[d]], cmap='plasma')
     axs[1,d].set_aspect(aspect)
 
-    im_S = axs[2,d].pcolormesh(sx, sy, S[steps[d]], cmap='bwr', norm=colors.CenteredNorm())
+    im_S = axs[2,d].pcolormesh(sx, sy, S[steps[d]]/md['SAVE_STATS_DT'], cmap='bwr', norm=colors.CenteredNorm())
     axs[2,d].set_aspect(aspect)
 
     im_phi.set_clim(0, 0.1)
-    im_W.set_clim(0, 0.2)
-    im_S.set_clim(-0.05, 0.05)
+    im_W.set_clim(0, 0.05)
+    im_S.set_clim(-0.02, 0.02)
 
     max_height = gzf[np.max(np.argwhere(th2_xz[steps[d]] > tracer_thresh)[:, 0])]
 
@@ -629,20 +628,18 @@ for d in range(len(steps)):
 
         if d == 0:
             axs[1,d].plot([-1,-1], [-2, -2], 'r--', label="convex envelope")
-            axs[1,0].legend()
+            axs[1,0].legend(loc='upper left', fontsize="small")
 
     if d == len(steps)-1:
-        cb_W = fig6.colorbar(im_W, ax = axs[1,d], label=r"$W$", shrink=0.7, extend='max')
+        cb_W = fig6.colorbar(im_W, ax = axs[1,d], label=r"$W$", shrink=0.9, extend='max')
         cb_W.set_label("$W$", rotation=0, labelpad=10)
-        cb_env = fig6.colorbar(im_b_edge, ax=axs[0,d], location='right', shrink=0.7, extend='max')
+        cb_env = fig6.colorbar(im_b_edge, ax=axs[0,d], location='right', shrink=0.9, extend='max')
         cb_env.set_label(r"$b$", rotation=0,  labelpad=10)
-        cb_plume = fig6.colorbar(im_phi, ax = axs[0,d], location='right', shrink=0.7, extend='max')
+        cb_plume = fig6.colorbar(im_phi, ax = axs[0,d], location='right', shrink=0.9, extend='max')
         cb_plume.set_label(r"$\phi$", rotation=0, labelpad=10)
-        cb_S = fig6.colorbar(im_S, ax=axs[2,d], label=r"$S$", shrink=0.7, extend='both')
+        cb_S = fig6.colorbar(im_S, ax=axs[2,d], label=r"$S$", shrink=0.9, extend='both')
         cb_S.set_label("$S$", rotation=0, labelpad=10)
 
-
-    #axs[1,d].axvline(md['N2']*max_height*L/B, linestyle=':', color='r')
 
     axs[1,d].set_xlim(bbins[0]-db/2, bmax_plot)
     axs[1,d].set_ylim(phibins[0]-dphi/2, phimax_plot)
@@ -655,13 +652,20 @@ for d in range(len(steps)):
         axs[1,d].set_ylabel(r"$\phi$", rotation=0, labelpad=10)
         axs[2,d].set_ylabel(r"$\phi$", rotation=0, labelpad=10)
 
+    if d > 0:
+        axs[0,d].yaxis.set_tick_params(labelleft=False)
+        axs[1,d].yaxis.set_tick_params(labelleft=False)
+        axs[2,d].yaxis.set_tick_params(labelleft=False)
+
+    axs[1,d].xaxis.set_tick_params(labelbottom=False)
+
     axs[2,d].set_xlabel(r"$b$")
 
     axs[0,d].set_xlabel("$x$")
     axs[0,d].set_aspect(1)
     axs[0,d].set_xlim(-3.25/factor, 3.25/factor)
     axs[0,d].set_ylim(-1, 5.5)
-    axs[0,d].set_title("({1}) t = {0:.0f}".format(times[steps[d]], labels[d]))
+    axs[0,d].set_title("({1}) t = {0:.2f}".format(times[steps[d]], labels[d]))
 
 if save:
     fig6.savefig(join(fig_save_dir, 'W_evol.png'), dpi=300)
@@ -671,7 +675,7 @@ if save:
 # Figure 7: QSS cumulative mixed volume distribution
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-fig7, axs7 = plt.subplots(2, 1, figsize=(6, 6))#, constrained_layout=True)
+fig7, axs7 = plt.subplots(2, 1, figsize=(8, 7))
 
 # colourmap
 colors_red = plt.cm.coolwarm(np.linspace(0.53, 1, 32))
@@ -683,7 +687,7 @@ im_b_edge = axs7[1].contour(Xf, Yf, plot_env[steps[-1]], levels = contours_b_sho
 
 M_lim = np.nanmax(M[steps[-1]])
 im_M_bphi = axs7[0].pcolormesh(sx, sy, M_nobulge[steps[-1]], cmap=custom_cmap,
-        norm=colors.CenteredNorm(halfrange = .6*M_lim))
+        norm=colors.CenteredNorm(halfrange = .6*M_lim), alpha=0.7)
 
 plot_array = np.copy(plot_plume[steps[-1]])
 for i in range(int(md['Nb'])):
@@ -707,7 +711,7 @@ Fphi_filtered = np.where(np.logical_and(sxf > b_s + dbdphi * (syf - phi_s), M > 
 fn = 4 # filter_num
 axs7[0].quiver(sxf[::fn,::fn], syf[::fn, ::fn], Fb_nobulge[steps[-1], ::fn, ::fn],
         Fphi_nobulge[steps[-1], ::fn, ::fn],
-        angles='xy', units='xy', pivot='tail', fc='k', ec='k', linewidth=0.1, scale=.1)
+        angles='xy', units='xy', pivot='tail', fc='k', ec='k', linewidth=0.1, scale=.05)
 
 axs7[0].set_title("(a) buoyancy-tracer space")
 axs7[0].set_ylabel(r"$\phi$", rotation=0, labelpad=10)
@@ -743,47 +747,26 @@ if save:
 
 fig8 = plt.figure(figsize=(7,4), constrained_layout=True)
 axs8 = plt.gca()
-#plt.subplots(1,2, figsize=(8, 3), constrained_layout=True)
 
 M_lim = np.nanmax(M[steps[-1]])
-#im_M_bphi = axs8[0].pcolormesh(sx, sy, np.where(sxf > dbdphi * syf, M[steps[-1]], np.nan), cmap=custom_cmap,
 im_M_bphi = axs8.pcolormesh(sx, sy, M[steps[-1]], cmap=custom_cmap,
         norm=colors.CenteredNorm(halfrange = .6*M_lim), alpha=0.6)
 
 axs8.plot(dbdphi*(sy-phi_s)+b_s, sy, color='g')
 
-fn = 2 # filter_num
+fn = 4 # filter_num
 axs8.quiver(sxf[::fn,::fn], syf[::fn, ::fn], Fb_filtered[steps[-1], ::fn, ::fn],
         Fphi_filtered[steps[-1], ::fn, ::fn],
         angles='xy', units='xy', pivot='tail', fc='k', ec='k', linewidth=0.1, scale=0.2)
 
-axs8.set_xlim(bbins[0]-db/2, bmax_plot)
-axs8.set_ylim(phibins[0]-dphi/2, phimax_plot)
-
-#im_div = axs8[1].pcolormesh(sx, sy, div_F[steps[-1]], cmap='bwr', norm=colors.CenteredNorm())
-#axs8[1].streamplot(sxf, syf, F_b[steps[-1]], F_phi[steps[-1]], density=1, color='k', linewidth=1,
-    #arrowstyle='fancy', broken_streamlines=False)
-
-#axs8[1].set_xlim(bbins[0]-db/2, bmax_plot)
-#axs8[1].set_ylim(phibins[0]-dphi/2, phimax_plot)
-
-#im_div.set_clim(-1e-1, 1e-1)
-
 cb_W = fig8.colorbar(im_M_bphi, ax = axs8, shrink=0.7, extend='both')
 cb_W.set_label("$M$", rotation=0, labelpad=10)
 
-#cb_div = fig8.colorbar(im_div, ax = axs8[1], shrink=0.7)
-#cb_div.set_label(r"$\nabla \cdot \mathbf{F}$", rotation=0, labelpad=10)
-
+axs8.set_xlim(bbins[0]-db/2, bmax_plot)
+axs8.set_ylim(phibins[0]-dphi/2, phimax_plot)
 axs8.set_aspect(aspect)
-#axs8[1].set_aspect(aspect)
-
 axs8.set_ylabel(r"$\phi$", rotation=0, labelpad=10)
 axs8.set_xlabel(r"$b$")
-#axs8[1].set_xlabel(r"$b$")
-
-#axs8[0].set_title(r"(a) $M$ & $\mathbf{F}$")
-#axs8[1].set_title(r"(b) $\nabla \cdot \mathbf{F}$ & field lines of $\mathbf{F}$")
 
 if save:
     fig8.savefig(join(fig_save_dir, 'MF_plot.png'), dpi=300)
@@ -794,12 +777,6 @@ if save:
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 fig_ga = plt.figure(figsize=(2.4, 2))
-
-# colourmap
-colors_red = plt.cm.coolwarm(np.linspace(0.53, 1, 32))
-colors_blue = plt.cm.coolwarm(np.linspace(0, 0.47, 32))
-all_colors = np.vstack((colors_blue, colors_red))
-custom_cmap = colors.LinearSegmentedColormap.from_list("cmap", all_colors)
 
 im_b_edge = plt.contour(Xf, Yf, plot_env[steps[-1]], levels = contours_b, cmap='cool', alpha=0.8)
 
@@ -817,11 +794,12 @@ plt.gca().set_aspect(1)
 plt.gca().axis('off')
 plt.xlim(-4, 4)
 plt.ylim(-2, 6)
-#plt.ylim(-0.6, 5.5)
 
 plt.box(False)
 plt.tight_layout()
-plt.savefig('/home/cwp29/Documents/papers/conv_pen/draft2/ga.jpg', dpi=300, bbox_inches='tight', pad_inches=0)
+if save:
+    plt.savefig('/home/cwp29/Documents/papers/conv_pen/draft3/ga.jpg', dpi=300, bbox_inches='tight',
+            pad_inches=0)
 
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 # Figure 9: calculating threshold for M
@@ -832,8 +810,8 @@ axs9 = fig9.subplot_mosaic("AA;BC")
 
 threshs = [0]
 
-cols = plt.cm.rainbow(np.linspace(0, 1, NSAMP-1))
-for i,c in zip(range(NSAMP-1), cols):
+cols = plt.cm.rainbow(np.linspace(0, 1, NSAMP-t0_idx-1))
+for i in range(NSAMP-1):
     M_bins = np.linspace(0, np.nanmax(M[i]), 200)
 
     dWdt_int = []
@@ -841,27 +819,25 @@ for i,c in zip(range(NSAMP-1), cols):
     divF_int = []
 
     for m in M_bins[1:]:
-        dWdt_int.append(np.nansum(np.where(np.logical_and(sxf > b_s + dbdphi * (syf - phi_s), np.logical_and(M[i] >= 0, M[i] < m)),
+        dWdt_int.append(np.nansum(np.where(np.logical_and(sxf > b_s + dbdphi * (syf - phi_s),
+            np.logical_and(M[i] >= 0, M[i] < m)),
             (W[i+1]-W[i])/md['SAVE_STATS_DT'], 0)))
-        S_int.append(np.nansum(np.where(np.logical_and(sxf > b_s + dbdphi*(syf - phi_s), np.logical_and(M[i] >= 0, M[i] < m)),
+        S_int.append(np.nansum(np.where(np.logical_and(sxf > b_s + dbdphi*(syf - phi_s),
+            np.logical_and(M[i] >= 0, M[i] < m)),
             S[i], 0)))
-        divF_int.append(np.nansum(np.where(np.logical_and(sxf > b_s + dbdphi*(syf - phi_s),np.logical_and(M[i]>=0, M[i]<m)), div_F[i], 0)))
+        divF_int.append(np.nansum(np.where(np.logical_and(sxf > b_s + dbdphi*(syf - phi_s),
+            np.logical_and(M[i]>=0, M[i]<m)), div_F[i], 0)))
 
     dWdt_int = np.array(dWdt_int)
     S_int = np.array(S_int)
     divF_int = np.array(divF_int)
-
-    #axs9["A"].plot(M_bins[1:], ndimage.uniform_filter1d(dWdt_int - S_int, size=20), color=c)
-    axs9["A"].plot(M_bins[1:], ndimage.uniform_filter1d(divF_int, size=20), color=c)
-
-    #threshs.append(M_bins[1:][np.argmin(np.abs(ndimage.uniform_filter1d(dWdt_int - S_int, size=20)))])
+    if times[i] >= 0:
+        axs9["A"].plot(M_bins[1:], ndimage.uniform_filter1d(divF_int, size=20), color=cols[i-t0_idx])
     threshs.append(M_bins[1:][np.argmin(np.abs(ndimage.uniform_filter1d(divF_int, size=20)))])
 
-    #axs9["A"].axvline(threshs[-1], ls=':', color=c)
-
 axs9["A"].axhline(0, color='k')
-sm = plt.cm.ScalarMappable(cmap='rainbow', norm=plt.Normalize(vmin=times[0], vmax=times[-1]))
-fig9.colorbar(sm, ax=axs9["A"], label=r"$t$", location='right')
+sm = plt.cm.ScalarMappable(cmap='rainbow', norm=plt.Normalize(vmin=0, vmax=times[-1]))
+t_cbar = fig9.colorbar(sm, ax=axs9["A"], label=r"$t$", location='right')
 axs9["A"].set_xlabel(r"$m$")
 axs9["A"].set_ylabel(r"$f(m; t)$")
 axs9["A"].set_xlim(0, np.nanmax(M))
@@ -892,8 +868,6 @@ for i in range(NSAMP-1):
     errors.append(100*abs((int_smooth - int_calc)/int_calc))
 
 axs9["C"].axhline(0, color='k')
-#axs9["C"].plot(times, errors, color='b')
-#axs9["C"].set_ylim(0, 100)
 axs9["C"].plot(times, calc_ints, color='b', label=r"$f(m^*; t)$")
 axs9["C"].plot(times, smooth_ints, color='r', label=r"$f(\tilde{m}; t)$")
 axs9["C"].legend()
@@ -918,13 +892,8 @@ if save:
 # Figure 10: partitioned distribution M
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-fig10, axs10 = plt.subplots(1, 2, figsize=(8,3), constrained_layout=True)
+fig10, axs10 = plt.subplots(1, 2, figsize=(8, 2.2), constrained_layout=True)
 
-# colourmap
-colors_red = plt.cm.coolwarm(np.linspace(0.53, 1, 32))
-colors_blue = plt.cm.coolwarm(np.linspace(0, 0.47, 32))
-all_colors = np.vstack((colors_blue, colors_red))
-custom_cmap = colors.LinearSegmentedColormap.from_list("cmap", all_colors)
 
 nodes = [-np.nanmax(M[steps[-1]]), 0, 0, smooth_threshs[steps[-1]], smooth_threshs[steps[-1]], np.nanmax(M[steps[-1]])]
 custom_colors = ["blue", plt.cm.Blues(0.5), plt.cm.Greens(0.5), "green", plt.cm.Reds(0.5),
@@ -987,12 +956,13 @@ plt.pcolormesh(sx, sy, np.where(Scum[-1]>0, W[-1], np.nan))
 fig11, axs11 = plt.subplots(1, 2, figsize=(8, 3), constrained_layout=True)
 
 source_vol = np.nansum(np.where(Scum > 0, W, 0), axis=(1,2))
+source_vol = np.nansum(np.where(S > 0, W, 0), axis=(1,2))
 U_vol = np.nansum(np.where(np.logical_or(M <=0, sxf < b_s + dbdphi * (syf-phi_s)), W, np.nan), axis=(1,2))
 total_vol = np.nansum(W, axis=(1,2))
 
 axs11[0].plot(times, source_vol, color='b', ls = '--', label=r"$V(\mathcal{S})$")
 axs11[0].plot(times, U_vol, color='b', label=r"$V(\mathcal{U})$")
-axs11[0].plot(times, total_vol, color='k', label=r"Full plume")
+#axs11[0].plot(times, total_vol, color='k', label=r"Full plume")
 
 axs11[0].set_title("(a) Identifying QSS")
 
@@ -1000,11 +970,17 @@ axs11[0].legend()
 axs11[0].set_xlabel(r"$t$")
 
 cum_source_vol = np.nansum(np.where(S > 0, Scum, 0), axis=(1,2))
-#axs11[0].plot(times, source_vol, color='purple')
-axs11[0].plot(times, cum_source_vol, color='k', linestyle='--', label="Cum source")
+#axs11[0].plot(times, cum_source_vol, color='k', linestyle='--', label="Cum source")
 
-if len(np.argwhere(cum_source_vol[t0_idx+1:] > 2*source_vol[t0_idx+1:])) > 0:
-    t_QSS = times[t0_idx+1+np.min(np.argwhere(cum_source_vol[t0_idx+1:] > 2*source_vol[t0_idx+1:]))]
+#if len(np.argwhere(cum_source_vol[t0_idx+1:] > 2*source_vol[t0_idx+1:])) > 0:
+    #t_QSS = times[t0_idx+1+np.min(np.argwhere(cum_source_vol[t0_idx+1:] > 2*source_vol[t0_idx+1:]))]
+#else:
+    #print("QSS bork")
+    #t_QSS = times[35]
+
+if len(np.argwhere(np.abs(source_vol[t0_idx+1:] - U_vol[t0_idx+1:])/source_vol[t0_idx+1:] < 0.1)) > 0:
+    t_QSS = times[t0_idx+1+np.min(np.argwhere(np.abs(source_vol[t0_idx+1:] - \
+        U_vol[t0_idx+1:])/source_vol[t0_idx+1:] < 0.1))]
 else:
     print("QSS bork")
     t_QSS = times[35]
@@ -1030,7 +1006,7 @@ A_vol = np.nansum(W_mixed, axis=(1,2))
 axs11[0].set_xlim(times[0], times[-1])
 axs11[1].set_xlim(times[0], times[-1])
 axs11[1].set_ylim(0, 260)
-axs11[0].set_ylim(0, 1.1*total_vol[-1])
+#axs11[0].set_ylim(0, 1.1*total_vol[-1])
 
 axs11[0].axvline(t_QSS, color='k', linestyle=':')
 axs11[1].axvline(t_QSS, color='k', linestyle=':')
@@ -1052,84 +1028,33 @@ if save:
 # Figure 11.5: entrainment & entrainment rate
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-debug = True
-
 A_ent_vol = []
 T_ent_vol = []
 U_ent_vol = []
 sum_vol = []
 sum_vol2 = []
-sum_vol3 = []
-sum_vol4 = []
-
-phi_min = 1e-3
-
-Ent /= V
-Ent /= (dphi*phi0*db*B)
 
 boundary_F_int /= V
 boundary_F_int /= (.2*dphi*phi0*db*B)
-
-boundary_F /= V
-boundary_F /= (.2*dphi*phi0*db*B)
-
-boundary_F = np.where(boundary_F > 0, boundary_F, 0)
-
-plt.figure()
-plt.plot(bbins, boundary_F_int[-1, 0, :]/md['SAVE_STATS_DT'], color='r')
-plt.plot(bbins, Ent[-1, 0, :], color='b')
-plt.plot(bbins, boundary_F[-1, 0, :], color='b')
 
 fig11, axs11 = plt.subplots(1, 2, figsize=(8, 3), constrained_layout=True)
 axs11[0].axvline(t_QSS, color='k', linestyle=':')
 axs11[1].axvline(t_QSS, color='k', linestyle=':')
 
-for i in range(1, NSAMP):
-    Ent[i] += Ent[i-1]
-    boundary_F[i] += boundary_F[i-1]
-
 for i in range(NSAMP):
-    if dphi*phi0 < phi_min:
-        E = -(boundary_flux[i, 1] - boundary_flux[i, 0])/(dphi*phi0)
-    else:
-        E = -(boundary_flux[i, 1] - boundary_flux[i, 0])/(phi_min)
-
     E = -boundary_flux[i, 2]
 
-    #E = np.where(E<0, 0, E)
     sum_vol.append(E[0])
     sum_vol2.append(np.nansum(boundary_F_int[i,0,:])*db*B)
-    sum_vol3.append(np.nansum(Ent[i,0,:])*db*B)
-    sum_vol4.append(np.nansum(boundary_F[i,0,:])*db*B)
 
-    #if times[i] >= t_QSS:
-    T_idx = np.argwhere(np.logical_and(M[i, 0, :] <= smooth_threshs[i], M[i, 0, :] > 0))
-    T_idx = T_idx[T_idx > 30]
-    if len(T_idx) == 0:
-        T_ent_vol.append(0)
-    else:
-        T_ent_vol.append(E[np.min(T_idx)])
+    U_ent_vol.append(np.nansum(np.where(M[i,0,:]<=0, boundary_F_int[i,0,:], np.nan))*db*B)
+    T_ent_vol.append(np.nansum(np.where(np.logical_and(M[i,0,:]>0, M[i,0,:] <= smooth_threshs[i]),
+        boundary_F_int[i,0,:], np.nan))*db*B)
+    A_ent_vol.append(np.nansum(np.where(M[i,0,:] > smooth_threshs[i], boundary_F_int[i,0,:], np.nan))*db*B)
 
-    A_idx = np.argwhere(M[i,0,:] < 0)
-    if len(A_idx) == 0:
-        A_ent_vol.append(E[1] - T_ent_vol[-1])
-        U_ent_vol.append(E[0] - E[1])
-    else:
-        A_idx = np.max(A_idx)+1
-        A_ent_vol.append(E[A_idx] - T_ent_vol[-1])
-        U_ent_vol.append(E[0] - E[A_idx])
-
-    #else:
-        #T_ent_vol.append(0)
-        #A_ent_vol.append(0)
-        #U_ent_vol.append(0)
 
 sum_vol = np.array(sum_vol)
 sum_vol2 = np.array(sum_vol2)
-sum_vol3 = np.array(sum_vol3)
-sum_vol3 *= md['SAVE_STATS_DT']*T
-sum_vol4 = np.array(sum_vol4)
-sum_vol4 *= md['SAVE_STATS_DT']*T
 T_ent_vol = np.array(T_ent_vol)
 U_ent_vol = np.array(U_ent_vol)
 A_ent_vol = np.array(A_ent_vol)
@@ -1168,24 +1093,11 @@ axs11[0].plot(times, U_ent_vol, color='b', label=r"$E(\mathcal{U})$")
 axs11[0].plot(times, T_ent_vol, color='g', label=r"$E(\mathcal{T})$")
 axs11[0].plot(times, A_ent_vol, color='r', label=r"$E(\mathcal{A})$")
 
-axs11[0].plot(times, sum_vol, color='k', label=r"$E$")
-if debug:
-    axs11[0].plot(times, sum_vol2,
-            color='r', label=r"$E$ sum", linestyle='-.')
-    axs11[0].plot(times, sum_vol3,
-            label=r"$E$ sum", color='purple', linestyle='-.')
-    axs11[0].plot(times, sum_vol4,
-            label=r"$E$ sum", color='orange', linestyle='--')
-    axs11[0].plot(times, total_vol - input_vol, label=r"$E$", color='k', linestyle='--')
+#axs11[0].plot(times, sum_vol, color='k', label=r"$E$")
+#axs11[0].plot(times, total_vol - input_vol, label=r"$E$", color='k', linestyle='--')
+axs11[0].plot(times, sum_vol2, color='k', label=r"$E$")
 
-print("for fphi")
-print((total_vol[-1]-input_vol[-1])/sum_vol4[-1])
-
-print((total_vol[-1]-input_vol[-1])/sum_vol3[-1])
-
-print((total_vol[-1]-input_vol[-1])/sum_vol2[-1])
-
-print((total_vol[-1]-input_vol[-1])/sum_vol[-1])
+print("Entrainment error: ", (total_vol[-1]-input_vol[-1])/sum_vol2[-1])
 
 axs11[1].plot(times, U_ent_rate_early, color='b', alpha=0.4)
 axs11[1].plot(times, T_ent_rate_early, color='g', alpha=0.4)
@@ -1194,9 +1106,7 @@ axs11[1].plot(times, A_ent_rate_early, color='r', alpha=0.4)
 axs11[1].plot(times, U_ent_rate, color='b', label=r"$\dot{E}(\mathcal{U})/V(\mathcal{U})$")
 axs11[1].plot(times, T_ent_rate, color='g', label=r"$\dot{E}(\mathcal{T})/V(\mathcal{T})$")
 axs11[1].plot(times, A_ent_rate, color='r', label=r"$\dot{E}(\mathcal{A})/V(\mathcal{A})$")
-#axs11[1].plot(times, sum_vol, color='r', linestyle='--')
 
-#axs11[1].set_title("(b) Specific entrainment rate")
 axs11[1].text(-0.1, 1.15, "(b)", transform=axs11[1].transAxes, va='top', ha='right')
 axs11[1].set_ylim(0, 1.5)
 axs11[1].set_xlim(0, times[-1])
@@ -1239,15 +1149,13 @@ for i in range(1, len(ent_vols)):
 
 ent_vols *= md['SAVE_STATS_DT']
 
-#ent_vols = np.gradient(ent_vols, times[t0_idx:], axis=0)
 
 for i, c in zip(range(8, len(ent_vols), 8), cols):
     axs12.plot(bb_plot[1:], ent_vols[i, 1:], color=c, label="$t={0:.0f}$".format(times[t0_idx+i]))
 
 axs12.set_xlabel("$b$")
 axs12.set_ylabel("$e(b)$")
-#axs12.set_xlim(0, 0.9)
-axs12.set_ylim(0, 1.1*np.nanmax(ent_vols[:, 1:]))
+axs12.set_ylim(0, 500)
 axs12.set_xlim(bbins[0]-db/2, bmax_plot)
 axs12.legend()
 
@@ -1261,7 +1169,7 @@ if save:
 # Figure 12: mixing diagnostics cross sections
 #%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-fig12, axs12 = plt.subplots(2, 2, figsize=(8, 4), constrained_layout=True)
+fig12, axs12 = plt.subplots(2, 2, figsize=(8, 3.8), constrained_layout=True)
 
 N2 = np.gradient(th1_xz, gzf, axis=1)
 
@@ -1278,40 +1186,29 @@ Re_b = np.where(th2_xz >= tracer_thresh, Re_b, np.NaN)
 
 for single_ax in axs12.ravel():
     single_ax.set_aspect(1)
-    single_ax.set_xlabel(r"$x$")
-    single_ax.set_ylabel(r"$z$")
     single_ax.contour(Xf, Yf, plot_env[steps[-1]], levels = contours_b, cmap='cool', alpha=0.8)
     single_ax.set_xlim(-x_max, x_max)
-    single_ax.set_ylim(-1, 5.5)
+    single_ax.set_ylim(-1, 4.5)
+    single_ax.set_xlabel(r"$x$")
+    single_ax.set_ylabel(r"$z$")
 
 eps_im = axs12[0,0].pcolormesh(X, Y, eps[steps[-1]], cmap='hot_r')
-#eps_contour_t = axs12[0,0].contour(Xf, Yf, th2_xz[steps[-1]], levels=[tracer_thresh], colors='green', linestyles='--')
-eps_cb = fig12.colorbar(eps_im, ax=axs12[0,0], extend='both')
+eps_cb = fig12.colorbar(eps_im, ax=axs12[0,0], extend='max', shrink=0.8)
 eps_cb.set_label(r"$\varepsilon$", rotation=0, labelpad=10)
 eps_im.set_clim(0, 100)
 
 chi_im = axs12[0,1].pcolormesh(X, Y, chi[steps[-1]], cmap='hot_r')
-#chi_contour_b = axs12[0,1].contour(Xf, Yf, b[steps[-1]], levels=contour_lvls_b, colors='darkturquoise', alpha=0.7)
-#chi_contour_t = axs12[0,1].contour(Xf, Yf, th2_xz[steps[-1]], levels=[tracer_thresh], colors='green', linestyles='--')
-
-chi_cb = fig12.colorbar(chi_im, ax=axs12[0,1], extend='both')
+chi_cb = fig12.colorbar(chi_im, ax=axs12[0,1], extend='max', shrink=0.8)
 chi_cb.set_label(r"$\chi$", rotation=0, labelpad=10)
 chi_im.set_clim(0, 0.1)
 
 Reb_im = axs12[1,0].pcolormesh(X, Y, Re_b[steps[-1]], cmap='hot_r')
-#Reb_contour_b = axs12[1,0].contour(Xf, Yf, b[steps[-1]], levels=contour_lvls_b, colors='darkturquoise', alpha=0.5)
-#Reb_contour_t = axs12[1,0].contour(Xf, Yf, th2_xz[steps[-1]], levels=[tracer_thresh], colors='green', linestyles='--')
-
-Reb_cb = fig12.colorbar(Reb_im, ax=axs12[1,0], extend='both')
+Reb_cb = fig12.colorbar(Reb_im, ax=axs12[1,0], extend='max', shrink=0.8)
 Reb_cb.set_label(r"$I$", rotation=0, labelpad=10)
-#Reb_im.set_clim(-1, 5)
 Reb_im.set_clim(0, 20)
 
 N2_im = axs12[1,1].pcolormesh(X, Y, N2[steps[-1]], cmap='bwr')
-#N2_contour_b = axs12[1,1].contour(Xf, Yf, b[steps[-1]], levels=contour_lvls_b, colors='grey', alpha=0.5)
-#N2_contour_t = axs12[1,1].contour(Xf, Yf, th2_xz[steps[-1]], levels=[tracer_thresh], colors='green', linestyles='--')
-
-N2_cb = fig12.colorbar(N2_im, ax=axs12[1,1], extend='both')
+N2_cb = fig12.colorbar(N2_im, ax=axs12[1,1], extend='max', shrink=0.8)
 N2_cb.set_label(r"$\partial_z b$", rotation = 0, labelpad=10)
 N2_im.set_clim(-2, 2)
 
@@ -1331,31 +1228,42 @@ if input("Proceed with figures using 'end.h5'?") == "":
 else:
     print("bananas")
 
-def calculate_partitioned_pdf(field, field_min, field_max, cols, labels, axs, full_label=False):
+def calculate_partitioned_pdf(field, field_min, field_max, cols, labels, axs, label=False, alpha=1.0):
     h, bins = np.histogram(field.flatten(), bins=256, range = (field_min, field_max))
     bins_plot = 0.5*(bins[1:] + bins[:-1])
 
     integral = np.sum(h * np.power(10, bins[1:] - bins[:-1]))
-    if full_label:
-        axs.semilogx(np.power(10, bins_plot), h/integral, color='k', linestyle='--', label=labels['Full'])
+    if label:
+        axs.semilogx(np.power(10, bins_plot), h/integral, color='k', linestyle='--', label=labels['full'],
+                alpha=alpha)
     else:
-        axs.semilogx(np.power(10, bins_plot), h/integral, color='k', linestyle='--')
+        axs.semilogx(np.power(10, bins_plot), h/integral, color='k', linestyle='--', alpha=alpha)
 
     mixing_field = np.where(np.logical_and(pvd < pvd_thresh, pvd > 0), field, np.nan)
     mixed_field = np.where(pvd >= pvd_thresh, field, np.nan)
     plume_field = np.where(pvd <= 0, field, np.nan)
 
+    plume_h, bins = np.histogram(plume_field.flatten(), bins=256,
+            range = (field_min, field_max))
+    if label:
+        axs.semilogx(np.power(10,bins_plot), plume_h/integral, color=cols['plume'], label=labels['plume'])
+    else:
+        axs.semilogx(np.power(10,bins_plot), plume_h/integral, color=cols['plume'])
+
+
     mixing_h, bins = np.histogram(mixing_field.flatten(), bins=256,
             range = (field_min, field_max))
-    axs.semilogx(np.power(10, bins_plot), mixing_h/integral, color=cols['mixing'], label=labels['mixing'])
+    if label:
+        axs.semilogx(np.power(10, bins_plot), mixing_h/integral, color=cols['mixing'], label=labels['mixing'])
+    else:
+        axs.semilogx(np.power(10, bins_plot), mixing_h/integral, color=cols['mixing'])
 
     mixed_h, bins = np.histogram(mixed_field.flatten(), bins=256,
             range = (field_min, field_max))
-    axs.semilogx(np.power(10,bins_plot), mixed_h/integral, color=cols['mixed'], label=labels['mixed'])
-
-    plume_h, bins = np.histogram(plume_field.flatten(), bins=256,
-            range = (field_min, field_max))
-    axs.semilogx(np.power(10,bins_plot), plume_h/integral, color=cols['plume'], label=labels['plume'])
+    if label:
+        axs.semilogx(np.power(10,bins_plot), mixed_h/integral, color=cols['mixed'], label=labels['mixed'])
+    else:
+        axs.semilogx(np.power(10,bins_plot), mixed_h/integral, color=cols['mixed'])
 
     axs.set_xlim(np.power(10, field_min), np.power(10, field_max))
     axs.set_ylabel("Scaled frequency")
@@ -1398,9 +1306,6 @@ with h5py.File(join(save_dir,out_file), 'r') as f:
     pvd = np.where(pvd == -1e9, np.nan, pvd)
     pvd /= V
 
-    #plt.figure()
-    #plt.imshow(pvd[int(len(pvd)/2)])
-    #plt.show()
     print("Loaded PVD field")
 
     phi = np.array(f['Timestep']['TH2'][pvd_lim:-pvd_lim, idx_min:idx_max, pvd_lim:-pvd_lim])
@@ -1455,7 +1360,7 @@ lower_cols = {
         'mixing': 'lightgreen'
         }
 lower_labels = {
-        'full': r'Full, $\nu_{\mathrm{SGS}} = 0$',
+        'full': r'Total, $\nu_{\mathrm{SGS}} = 0$',
         'mixed': r'A, $\nu_{\mathrm{SGS}} = 0$',
         'mixing': r'T, $\nu_{\mathrm{SGS}} = 0$',
         'plume': r'U, $\nu_{\mathrm{SGS}} = 0$'
@@ -1466,50 +1371,55 @@ upper_cols = {
         'mixing': 'g'
         }
 upper_labels = {
-        'full': r'Full, $\nu_{\mathrm{SGS}} > 0$',
+        'full': r'Total, $\nu_{\mathrm{SGS}} > 0$',
         'mixed': r'A, $\nu_{\mathrm{SGS}} > 0$',
         'mixing': r'T, $\nu_{\mathrm{SGS}} > 0$',
         'plume': r'U, $\nu_{\mathrm{SGS}} > 0$'
         }
 
+labels = {
+        'full': r'Full',
+        'mixed': r'A',
+        'mixing': r'T',
+        'plume': r'U'
+        }
+
 tked_min = -8.0
 tked_max = 2.0
 
-nu_min = -7.0
+nu_min = -8.0
 nu_max = -1.0
 
-fig13, axs13 = plt.subplots(3, 2, figsize=(8, 7), constrained_layout=True)
+fig13, axs13 = plt.subplots(3, 2, figsize=(8, 6), constrained_layout=True)
 
 nu_eff = np.log10(md['nu'] + nu_t)
 h, bins = np.histogram(nu_eff.flatten(), bins=256, range = (nu_min, nu_max), density=True)
 axs13[0,1].semilogx(np.power(10,0.5*(bins[1:]+bins[:-1])), h/(np.sum(h*np.power(10, 0.5*(bins[1:]+bins[:-1])))),
         color='b', label=r"$\nu_{\mathrm{tot}}$")
 axs13[0,1].axvline(md['nu'], color='r', label=r"Prescribed $\nu$")
-axs13[0,1].legend()
+axs13[0,1].legend(fontsize="medium")
 
-calculate_partitioned_pdf(tked_3d_lower_peak, tked_min, tked_max, lower_cols, lower_labels, axs13[0,0])
-calculate_partitioned_pdf(tked_3d_upper_peak, tked_min, tked_max, upper_cols, upper_labels, axs13[0,0])
+calculate_partitioned_pdf(tked_3d_lower_peak, tked_min, tked_max, lower_cols, lower_labels, axs13[0,0],
+        label=False, alpha=0.8)
+calculate_partitioned_pdf(tked_3d_upper_peak, tked_min, tked_max, upper_cols, labels, axs13[0,0],
+        label=True)
 
-#axs13[0,0].set_ylim(0, 0.7)
-axs13[0,0].legend()
+axs13[0,0].legend(fontsize="small")
 axs13[0,0].set_xlabel(r"TKE dissipation rate $\varepsilon$")
 axs13[0,1].set_xlim(np.power(10, nu_min), np.power(10, nu_max))
-axs13[0,1].set_ylim(0, 6)
+axs13[0,1].set_ylim(0, 60)
+axs13[0,0].set_ylim(0, 0.026)
 axs13[0,1].set_xlabel(r"$\nu_{\mathrm{tot}}$")
 axs13[0,1].set_ylabel("Scaled frequency")
 
-#if save:
-    #fig13.savefig(join(fig_save_dir, 'tked_pdf.png'), dpi=300)
-    #fig13.savefig(join(fig_save_dir, 'tked_pdf.pdf'))
-
 lower_labels = {
-        'full': r'Full, $\kappa_{\mathrm{SGS}} = 0$',
+        'full': r'Total, $\kappa_{\mathrm{SGS}} = 0$',
         'mixed': r'A, $\kappa_{\mathrm{SGS}} = 0$',
         'mixing': r'T, $\kappa_{\mathrm{SGS}} = 0$',
         'plume': r'U, $\kappa_{\mathrm{SGS}} = 0$'
         }
 upper_labels = {
-        'full': r'Full, $\kappa_{\mathrm{SGS}} > 0$',
+        'full': r'Total, $\kappa_{\mathrm{SGS}} > 0$',
         'mixed': r'A, $\kappa_{\mathrm{SGS}} > 0$',
         'mixing': r'T, $\kappa_{\mathrm{SGS}} > 0$',
         'plume': r'U, $\kappa_{\mathrm{SGS}} > 0$'
@@ -1518,32 +1428,28 @@ upper_labels = {
 chi_min = -9.0
 chi_max = 2.0
 
-kappa_min = -7.0
+kappa_min = -8.0
 kappa_max = -1.0
-
-#fig14, axs14 = plt.subplots(1, 2, figsize=(8, 3), constrained_layout=True)
 
 kappa_eff = np.log10(md['kappa'] + kappa_t)
 h, bins = np.histogram(kappa_eff.flatten(), bins=256, range = (kappa_min, kappa_max), density=True)
 axs13[1,1].semilogx(np.power(10,0.5*(bins[1:]+bins[:-1])), h/(np.sum(h*np.power(10, 0.5*(bins[1:]+bins[:-1])))),
         color='b', label=r"$\kappa_{\mathrm{tot}}$")
 axs13[1,1].axvline(md['kappa'], color='r', label=r"Prescribed $\kappa$")
-axs13[1,1].legend()
+axs13[1,1].legend(fontsize="small")
 
-calculate_partitioned_pdf(chi_3d_lower_peak, chi_min, chi_max, lower_cols, lower_labels, axs13[1,0])
-calculate_partitioned_pdf(chi_3d_upper_peak, chi_min, chi_max, upper_cols, upper_labels, axs13[1,0])
+calculate_partitioned_pdf(chi_3d_lower_peak, chi_min, chi_max, lower_cols, lower_labels, axs13[1,0],
+        label=False, alpha=0.8)
+calculate_partitioned_pdf(chi_3d_upper_peak, chi_min, chi_max, upper_cols, labels, axs13[1,0],
+        label=True)
 
-#axs13[1,0].set_ylim(0, 0.75)
-axs13[1,0].legend()
+#axs13[1,0].legend(fontsize="small")
 axs13[1,0].set_xlabel(r"Buoyancy variance dissipation rate $\chi$")
 axs13[1,1].set_xlim(np.power(10, kappa_min), np.power(10, kappa_max))
-axs13[1,1].set_ylim(0, 6)
+axs13[1,1].set_ylim(0, 30)
+axs13[1,0].set_ylim(0, 0.028)
 axs13[1,1].set_xlabel(r"$\kappa_{\mathrm{tot}}$")
 axs13[1,1].set_ylabel("Scaled frequency")
-
-#if save:
-    #fig14.savefig(join(fig_save_dir, 'chi_pdf.png'), dpi=300)
-    #fig14.savefig(join(fig_save_dir, 'chi_pdf.pdf'))
 
 fields = ["Re_b", "TH1"]
 dim_factors = [1, B]
@@ -1556,22 +1462,20 @@ N2_min = -5.0
 N2_max = 10.0
 
 labels = {
-        'full': r'Full',
+        'full': r'Total',
         'mixed': r'A',
         'mixing': r'T',
         'plume': r'U'
         }
 
-#fig15, axs15 = plt.subplots(1, 2, figsize=(8, 3), constrained_layout=True)
-
-calculate_partitioned_pdf(Re_b_3d, Re_b_min, Re_b_max, upper_cols, labels, axs13[2,0])
+calculate_partitioned_pdf(Re_b_3d, Re_b_min, Re_b_max, upper_cols, labels, axs13[2,0], label=False)
 
 h, bins = np.histogram(N2_3d.flatten(), bins=256, range = (N2_min, N2_max))
 bins_plot = 0.5*(bins[1:] + bins[:-1])
 integral = np.sum(h * (bins[1:] - bins[:-1]))
 
 axs13[2,1].plot(bins_plot, h/integral, color='k', linestyle='--',
-    label="Full plume")
+    label="Total")
 
 mixing_field = np.where(np.logical_and(pvd < pvd_thresh, pvd > 0), N2_3d, np.nan)
 mixed_field = np.where(pvd >= pvd_thresh, N2_3d, np.nan)
@@ -1589,25 +1493,19 @@ mixed_h, bins = np.histogram(mixed_field.flatten(), bins=256,
         range = (N2_min, N2_max))
 axs13[2,1].plot(bins_plot, mixed_h/integral, color='r', label="A")
 
-
-#axs13[2,0].set_ylim(0, 0.7)
-axs13[2,0].legend()
-axs13[2,1].legend()
+#axs13[2,0].legend(fontsize="small")
+#axs13[2,1].legend(fontsize="small")
 axs13[2,0].set_xlabel(r"Activity parameter $I$")
+axs13[2,0].set_ylim(0, 0.014)
 
 axs13[2,1].set_xlim(N2_min, N2_max)
 axs13[2,1].set_yscale('log')
 axs13[2,1].set_xlabel(r"Vertical buoyancy gradient $\partial_z b$")
 axs13[2,1].set_ylabel("Scaled frequency")
-#axs13[2,1].legend()
 
 for ax, label in zip(axs13.ravel(), ['(a)', '(b)', '(c)', '(d)', '(e)', '(f)']):
     ax.text(-0.1, 1.15, label, transform=ax.transAxes,
             va='top', ha='right')
-
-#if save:
-    #fig15.savefig(join(fig_save_dir, 'reb_dbdz_pdfs.png'), dpi=300)
-    #fig15.savefig(join(fig_save_dir, 'reb_dbdz_pdfs.pdf'))
 
 if save:
     fig13.savefig(join(fig_save_dir, 'mixing_pdfs.png'), dpi=300)
@@ -1624,7 +1522,6 @@ dim_factors = [1, B, np.power(L, 2) * np.power(T, -3), np.power(L, 2) * np.power
 
 with h5py.File(join(save_dir,out_file), 'r') as f:
     print("Keys: %s" % f['Timestep'].keys())
-    #pvd_thresh = smooth_threshs[get_index(f['Timestep'].attrs['Time'], times)]
     print(pvd_thresh)
 
     pvd = np.array(f['Timestep']['PVD'][pvd_lim:-pvd_lim, idx_min:idx_max, pvd_lim:-pvd_lim])

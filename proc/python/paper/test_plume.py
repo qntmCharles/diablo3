@@ -261,6 +261,9 @@ alpha = 0.5*np.power(M[cont_valid_indices],-1/2)*dQdz
 dQdz_cont = np.gradient(Q[plume_indices], gzf[plume_indices])
 alpha_cont = 0.5*np.power(M[plume_indices],-1/2)*dQdz_cont
 
+alpha_avg = np.nanmean(np.where(np.logical_and(gzf[cont_valid_indices]/r_0 <= z_upper,
+    gzf[cont_valid_indices]/r_0 >= z_lower), alpha, np.nan))
+
 ##### Calculate average profiles over r/r_m and turbulent nu, D #####
 z_min = plume_indices[-1]
 n_regrid = max(np.where(wbar[z_min,:]>0.02*wbar[z_min,0])[0])*2
@@ -448,6 +451,8 @@ ax8[0].set_ylim(0, md['LZ']/r_0)
 ax8[1].plot(alpha, gzf[cont_valid_indices]/r_0, color='blue')
 ax8[1].plot([alpha_p]*len(gzf[cont_valid_indices]), gzf[cont_valid_indices]/r_0, color='black',
         linestyle='dashed', label="$\\alpha_p = {0:.3f}$".format(alpha_p))
+ax8[1].axvline(alpha_avg, linestyle='--', color='blue')
+print(alpha_avg)
 ax8[1].legend()
 
 ax8[1].set_ylabel("$z/r_0$")
@@ -483,13 +488,13 @@ for i,c in zip(plume_indices,cols):
         axs23[0,0].plot(r_points/r_m[i], wbar[i]/w_m[i],color='blue',label="$\overline{w}/w_m$")
         axs23[0,0].plot(r_points/r_m[i], bbar[i]/b_m[i],color='red',linestyle='dashed',label="$\overline{b}/b_m$")
         axs23[0,0].plot(r_points/r_m[i], phibar[i]/b_m[i],color='green',linestyle='dotted',
-                label=r"$\overline{\phi}/b_m$")
+                label=r"$\overline{\phi}/\phi_m$")
         axs23[0,1].plot(r_points/r_m[i], uflucwflucbar[i]/(w_m[i]*w_m[i]), color='blue',
                 label="$\overline{u'w'}/w_m^2$")
         axs23[0,1].plot(r_points/r_m[i], uflucbflucbar[i]/(w_m[i]*b_m[i]), color='red',
                 linestyle='dashed', label="$\overline{u'b'}/w_m b_m$")
         axs23[0,1].plot(r_points/r_m[i], uflucphiflucbar[i]/(w_m[i]*b_m[i]), color='green',
-                linestyle='dotted', label="$\overline{u'\phi'}/w_m b_m$")
+                linestyle='dotted', label="$\overline{u'\phi'}/w_m \phi_m$")
     else:
         axs23[0,0].plot(r_points/r_m[i], wbar[i]/w_m[i],color='blue')
         axs23[0,0].plot(r_points/r_m[i], bbar[i]/b_m[i],color='red',linestyle='dashed')
@@ -508,8 +513,8 @@ axs23[0,0].legend()
 axs23[0,1].set_xlim(0,2)
 axs23[0,1].legend()
 
-axs23[1,1].axhline(-alpha_p, color='k', linestyle='dashed')
-axs23[1,1].text(0.05, 0.005-alpha_p, "-$\\alpha$", fontsize=14)
+axs23[1,1].axhline(-alpha_avg, color='k', linestyle='dashed')
+axs23[1,1].text(0.05, 0.005-alpha_avg, "-$\\alpha$", fontsize=14)
 axs23[1,0].set_xlim(0, 2)
 axs23[1,0].set_xlabel("$r/r_m$")
 axs23[1,0].set_ylabel("$\\overline{u}/w_m$")

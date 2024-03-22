@@ -43,9 +43,9 @@ clim_flag = True
 # Get dir locations from param file
 base_dir = '/home/cwp29/diablo3/strat/res_test/'
 version = 3.8
-save_dirs = ['128', '256/2feb', '512/30jan', '512/1feb']
+save_dirs = ['final/128', 'final/256', 'final/512_4', 'final/1024']
 
-fig6, axs = plt.subplots(1,len(save_dirs), figsize=(8, 2.5), constrained_layout=True, sharey=True)
+fig6, axs = plt.subplots(1,len(save_dirs), figsize=(8, 2), constrained_layout=True, sharey=True)
 
 for d in range(len(save_dirs)):
     save_dir = join(base_dir, save_dirs[d])
@@ -137,13 +137,13 @@ for d in range(len(save_dirs)):
 
     if d == 0:
         axs[d].set_ylabel(r"$\phi$", rotation=0, labelpad=10)
+        cb_W = fig6.colorbar(im_W, ax = axs[-1], label=r"$W$", location='right', extend='max')
+        cb_W.formatter.set_powerlimits((0, 0))
     axs[d].set_xlabel(r"$b$", rotation=0, labelpad=10)
 
-    cb_W = fig6.colorbar(im_W, ax = axs[d], label=r"$W$", location='bottom', extend='max')
-    cb_W.formatter.set_powerlimits((0, 0))
 
     if clim_flag:
-        Wmax = .1*np.nanmax(W[get_index(tplot, times)]/np.nansum(W[get_index(tplot, times)]))
+        Wmax = .05*np.nanmax(W[get_index(tplot, times)]/np.nansum(W[get_index(tplot, times)]))
         clim_flag = False
 
     im_W.set_clim(Wmax)
@@ -153,9 +153,12 @@ for d in range(len(save_dirs)):
     axs[d].set_xlim(bbins[0]-db/2, bmax_plot)
     axs[d].set_ylim(phibins[0]-dphi/2, phimax_plot)
 
+for ax, label in zip(axs.ravel(), ['(a)', '(b)', '(c)', '(d)']):
+    ax.text(-0.1, 1.15, label, transform=ax.transAxes, va='top', ha='right')
 
-plt.show()
 
 if save:
     fig6.savefig(join(fig_save_dir, 'res_test.png'), dpi=300)
     fig6.savefig(join(fig_save_dir, 'res_test.pdf'))
+
+plt.show()
