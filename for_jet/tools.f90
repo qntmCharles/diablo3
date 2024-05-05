@@ -49,27 +49,6 @@ contains
     if (end_wall_time - start_wall_time > wall_time_limit) then
       if (rank == 0) &
         write (*, '("STOP because of wall-time hit!")')
-      if ((rank == 0).and.(check_flux)) &
-        write (*, '("CHECK_FLUX")')
-      if ((rank == 0).and.(reset_time)) &
-        write (*, '("RESET_TIME")')
-      flag = .true.
-    end if
-
-    if (((flux_volume_c > 0).or.(flux_volume_v > 0)) .and. (check_flux)) then
-      if (rank == 0) &
-        write (*, '("STOP because of plume penetration!")')
-      if (rank == 0) &
-        write (*, *) "Reached time: ", time
-      if ((rank == 0).and.(check_flux)) &
-        write (*, '("CHECK_FLUX")')
-      if ((rank == 0).and.(reset_time)) &
-        write (*, '("RESET_TIME")')
-
-      open (11, file='time.dat', status='new')
-      write (11, *) time
-      close (11)
-
       flag = .true.
     end if
 

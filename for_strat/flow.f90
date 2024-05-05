@@ -11,11 +11,12 @@ module flow
   ! 3D
   real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1,s2,s3,s4,s5, s6, &
                                                            ur, utheta, u_sfluc, v_sfluc, w_sfluc, b_sfluc, &
+                                                           th_sfluc, &
                                                            chi_field, Ri_field, Re_b_field, N2_field, &
                                                            tked_field, pdf_field, pvd_field, B_field
   complex(rkind), pointer, contiguous, dimension(:,:,:) :: cu1,cu2,cu3,cp,cr1,cr2,cr3,cf1,cf2,cf3, &
                                                            cs1,cs2,cs3,cs4, cs5, cs6, cur, cutheta, cu_sfluc, &
-                                                           cv_sfluc, cw_sfluc, cb_sfluc, &
+                                                           cv_sfluc, cw_sfluc, cb_sfluc, cth_sfluc, &
                                                            cchi_field, cRi_field, cRe_b_field, cN2_field, &
                                                            ctked_field, cpdf_field, cpvd_field, cB_field
 
@@ -209,6 +210,7 @@ contains
     call alloc_array3D(v_sfluc,cv_sfluc)
     call alloc_array3D(w_sfluc,cw_sfluc)
     call alloc_array3D(b_sfluc,cb_sfluc)
+    call alloc_array3D(th_sfluc,cth_sfluc)
 
     call alloc_array3D(chi_field,cchi_field)
     call alloc_array3D(Ri_field,cRi_field)
@@ -811,6 +813,10 @@ contains
       call ReadHDF5_plane(fname, gname, Ent_phi_flux_mem)
       gname = 'Ent_phi_flux_cum'
       call ReadHDF5_plane(fname, gname, Ent_phi_flux_cum)
+      gname = 'boundary_F_mem'
+      call ReadHDF5_plane(fname, gname, boundary_F_mem)
+      gname = 'boundary_F_cum'
+      call ReadHDF5_plane(fname, gname, boundary_F_cum)
 
     end if
 
@@ -864,6 +870,10 @@ contains
       call WriteHDF5_plane(fname, gname, Ent_phi_flux_cum)
       gname = 'Ent_phi_flux_mem'
       call WriteHDF5_plane(fname, gname, Ent_phi_flux_mem)
+      gname = 'boundary_F_cum'
+      call WriteHDF5_plane(fname, gname, boundary_F_cum)
+      gname = 'boundary_F_mem'
+      call WriteHDF5_plane(fname, gname, boundary_F_mem)
     end if
 
     call wall_time(end_wall_time)

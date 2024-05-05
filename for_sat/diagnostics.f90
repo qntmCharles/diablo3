@@ -881,6 +881,7 @@ subroutine save_stats_chan(movie,final)
   call fft_xz_to_fourier(u3, cu3)
   call fft_xz_to_fourier(th(:, :, :, 1), cth(:, :, :, 1))
   call fft_xz_to_fourier(th(:, :, :, 2), cth(:, :, :, 2))
+  call fft_xz_to_fourier(th(:, :, :, 3), cth(:, :, :, 3))
   ! p already in Fourier space
 
   ! Apply phase shift
@@ -893,6 +894,7 @@ subroutine save_stats_chan(movie,final)
         cs4(i,k,j) = exp(cikx(i) * dx(1)/2.d0 + cikz(k) * dz(1)/2.d0) * cth(i,k,j,1)
         cs5(i,k,j) = exp(cikx(i) * dx(1)/2.d0 + cikz(k) * dz(1)/2.d0) * cp(i,k,j)
         cs6(i,k,j) = exp(cikx(i) * dx(1)/2.d0 + cikz(k) * dz(1)/2.d0) * cth(i,k,j,2)
+        cs7(i,k,j) = exp(cikx(i) * dx(1)/2.d0 + cikz(k) * dz(1)/2.d0) * cth(i,k,j,3)
       end do
     end do
   end do
@@ -903,6 +905,7 @@ subroutine save_stats_chan(movie,final)
   call fft_xz_to_physical(cu3, u3)
   call fft_xz_to_physical(cth(:, :, :, 1), th(:, :, :, 1))
   call fft_xz_to_physical(cth(:, :, :, 2), th(:, :, :, 2))
+  call fft_xz_to_physical(cth(:, :, :, 3), th(:, :, :, 3))
   ! p already in Fourier space
 
   call fft_xz_to_physical(cs1, s1)
@@ -911,6 +914,7 @@ subroutine save_stats_chan(movie,final)
   call fft_xz_to_physical(cs4, s4)
   call fft_xz_to_physical(cs5, s5)
   call fft_xz_to_physical(cs6, s6)
+  call fft_xz_to_physical(cs7, s7)
 
 
   ! Move vertical velocity back to vertical full grid
@@ -929,8 +933,11 @@ subroutine save_stats_chan(movie,final)
   end do
 
   !!! Compute azimuthal averages !!!
-  gname = 'th_az'
+  gname = 'phiv_az'
   call compute_azavg(gname, s6)
+
+  gname = 'phic_az'
+  call compute_azavg(gname, s7)
 
   gname = 'u_az'
   call compute_azavg_and_sfluc(gname, ur, u_sfluc)
@@ -1679,7 +1686,7 @@ subroutine tracer_density_cumulative_flux(buoyancy, tracer, zstart, zstop, diff_
 end
 
 !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
-subroutine tracer_density_flux(buoyancy, tracer, vvel, Nlayer, rankylayer, weights, phibins, dphi)
+subroutine tracer_density_flux(buoyancy, tracer, vvel, Nlayer, rankylayer, weights, phibins, dphi, vapour)
   !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
   ! Calculates weights for (b, phi) scatter plot
 
@@ -1689,6 +1696,7 @@ subroutine tracer_density_flux(buoyancy, tracer, vvel, Nlayer, rankylayer, weigh
   real(rkind), pointer, intent(inout) :: weights(:,:)
   real(rkind) phibins(1:Nphi)
   real(rkind) zstart, zstop, volume, dphi
+  logical vapour
 
   character(len=35) fname
   character(len=20) gname
@@ -1733,9 +1741,12 @@ subroutine tracer_density_flux(buoyancy, tracer, vvel, Nlayer, rankylayer, weigh
   call mpi_allreduce(mpi_in_place, volume, 1, mpi_double_precision, &
                      mpi_sum, mpi_comm_world, ierror)
 
-  flux_volume = volume ! set global flux_volume variable for checking penetration
+  if (vapour) then
+    flux_volume_v = volume ! set global flux_volume variable for checking penetration
+  else
+    flux_volume_c = volume
+  end if
 
-  !if (rank == 0) write(*,*) "flux volume", volume
 end
 
 

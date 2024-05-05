@@ -1078,8 +1078,6 @@ end
 
   real(rkind) kappa_t_mean(0:Nyp + 1)
 
-  real(rkind) debug_sum, debug_sum2, debug_sum3
-
   real(rkind), parameter :: c_amd = 0.2887d0
   real(rkind) delta_y(0:Nyp + 1), delta_yf(0:Nyp + 1)
   real(rkind) deltax, deltay, deltaz
@@ -1090,9 +1088,6 @@ end
   character(len=20) gname
 
   character(len=35) fname
-
-  ! Store/write 2D slices
-  real(rkind) varxy(0:Nxm1, 1:Nyp), varzy(0:Nzp - 1, 1:Nyp), varxz(0:Nxm1, 0:Nzp - 1)
 
   ! Array to store the velocity index for each component of the strain rate tensor
   integer U_index1(6)
@@ -1259,7 +1254,6 @@ end
         end do
       end do
 
-
       ! Compute kappa_e at GY points and store in temp_th
       do j = 2, Nyp + 1
         ! Set filter length (based on grid size) in y direction
@@ -1299,33 +1293,6 @@ end
                  * (dthetadz(i, k, j, n)*dyf(j-1) + dthetadz(i, k, j - 1, n) * dyf(j)) &
                                        / (2.d0*dy(j)) &
                  )
-            !DEBUG
-            if (temp_th(i, k, j) - 1.d0 == temp_th(i, k, j)) then
-                write(*,*) gx(i), gz(rankZ*Nzp+k), gyf(j)
-                write(*,*) dthetadx(i, k, j, n), dthetadx(i, k, j-1, n)
-                write(*,*) dthetadz(i, k, j, n), dthetadz(i, k, j-1, n)
-                write(*,*) dthetady(i, k, j, n)
-                write(*,*) du1dx(i, k, j), du1dx(i, k, j-1)
-                write(*,*) du1dy(i, k, j)
-                write(*,*) du1dz(i, k, j), du1dz(i, k, j-1)
-                write(*,*) du2dy(i, k, j), du2dy(i, k, j-1)
-                write(*,*) du3dz(i, k, j), du3dz(i, k, j-1)
-                write(*,*) du3dx(i, k, j), du3dx(i, k, j-1)
-                write(*,*) du2dz(i, k, j), du3dy(i, k, j)
-            end if
-            if ((time_step > 100).and.(n==3)) then
-              if ((gyf(j) < 0.15d0).and.(gyf(j+1) > 0.15d0)) then
-                if ((gx(i) == gz(rankZ*Nzp + k)).and.(gx(i) == 0.3d0)) then
-                  write(*,*) "normalisation factor"
-                  write(*,*) ((deltax * (dthetadx(i, k, j, n) * dyf(j-1) + &
-                            dthetadx(i, k, j - 1, n) * dyf(j)) / (2.d0*dy(j)))**2 &
-                            + (deltay * dthetady(i, k, j, n))**2 &
-                            + (deltaz * (dthetadz(i, k, j, n) * dyf(j-1) &
-                            + dthetadz(i, k, j - 1, n) * dyf(j)) / (2.d0*dy(j)))**2)
-                end if
-              end if
-            end if
-            !DEBUG
 
             if (temp_th(i, k, j) <= 0.0d0) then
               temp_th(i, k, j) = 0.0d0
@@ -1336,42 +1303,11 @@ end
               + (deltay * dthetady(i, k, j, n))**2 &
               + (deltaz * (dthetadz(i, k, j, n) * dyf(j-1) + dthetadz(i, k, j - 1, n) * dyf(j)) &
                                            / (2.d0*dy(j)))**2)
-            !DEBUG
-            if (temp_th(i, k, j) - 1.d0 == temp_th(i, k, j)) then
-                write(*,*) gx(i), gz(rankZ*Nzp+k), gyf(j)
-                write(*,*) dthetadx(i, k, j, n), dthetadx(i, k, j-1, n)
-                write(*,*) dthetadz(i, k, j, n), dthetadz(i, k, j-1, n)
-                write(*,*) dthetady(i, k, j, n)
-                write(*,*) du1dx(i, k, j), du1dx(i, k, j-1)
-                write(*,*) du1dy(i, k, j)
-                write(*,*) du1dz(i, k, j), du1dz(i, k, j-1)
-                write(*,*) du2dy(i, k, j), du2dy(i, k, j-1)
-                write(*,*) du3dz(i, k, j), du3dz(i, k, j-1)
-                write(*,*) du3dx(i, k, j), du3dx(i, k, j-1)
-                write(*,*) du2dz(i, k, j), du3dy(i, k, j)
-            end if
-            !DEBUG
             end if
 
           end do
         end do
       end do
-
-      ! DEBUG
-      if ((time_step > 180).and.(n==3)) then
-        debug_sum = 0.d0
-        do k = 0, Nzp -1
-          do i = 0, Nxm1
-            do j = jstart_th(3), jend_th(3)
-                debug_sum = debug_sum + temp_th(i, k, j)
-            end do
-          end do
-        end do
-        call mpi_allreduce(mpi_in_place, debug_sum, 1, &
-                         mpi_double_precision, mpi_sum, mpi_comm_world, ierror)
-        if (rank == 0) write(*,*) "temp_th"
-        if (rank == 0) write(*,*) debug_sum
-      end if
 
       ! Now, compute s1_th*dthetadx_i, storing in dthetadx_i
       ! Need only to compute at GYF points
@@ -1422,22 +1358,6 @@ end
         end do
       end do
 
-      ! DEBUG
-      if ((time_step > 180).and.(n==3)) then
-        debug_sum = 0.d0
-        do k = 0, Nzp -1
-          do i = 0, Nxm1
-            do j = jstart_th(3), jend_th(3)
-                debug_sum = debug_sum + kappa_t(i, k, j, 3)
-            end do
-          end do
-        end do
-        call mpi_allreduce(mpi_in_place, debug_sum, 1, &
-                         mpi_double_precision, mpi_sum, mpi_comm_world, ierror)
-        if (rank == 0) write(*,*) "kappa_t"
-        if (rank == 0) write(*,*) debug_sum
-      end if
-
       ! Now that we have calculated kappa_t, set the value at the ghost cells
       ! by sharing with neighboring processes.  This subroutine also sets
       ! the value of kappa_t to zero at both walls
@@ -1468,63 +1388,9 @@ end
                       - cikx(i) * Cdthetadx(i, k, j, n) &
                 ! dthetady is added through implicit eddy diffusivity
                       - cikz(k) * Cdthetadz(i, k, j, n)
-            cath_forcing(i, k, j, n) = cath_forcing(i, k, j, n) &
-                      - cikx(i) * Cdthetadx(i, k, j, n) &
-                      - cikz(k) * Cdthetadz(i, k, j, n)
           end do
         end do
       end do
-
-      ! DEBUG
-      if ((time_step > 180).and.(n==3)) then
-        call fft_xz_to_physical(cfth(:, :, :, 3), fth(:, :, :, 3))
-        debug_sum = 0.d0
-        do k = 0, Nzp -1
-          do i = 0, Nxm1
-            do j = jstart_th(3), jend_th(3)
-                debug_sum = debug_sum + fth(i, k, j, 3)
-            end do
-          end do
-        end do
-        call mpi_allreduce(mpi_in_place, debug_sum, 1, &
-                         mpi_double_precision, mpi_sum, mpi_comm_world, ierror)
-        if (rank == 0) write(*,*) "fth"
-        if (rank == 0) write(*,*) debug_sum
-        call fft_xz_to_fourier(fth(:, :, :, 3), cfth(:, :, :, 3))
-      end if
-
-      if (flag_save_LES .and. rk_step == 1) then
-        fname = 'movie.h5'
-        call mpi_barrier(mpi_comm_world, ierror)
-        if (rankZ == rankzmovie) then
-          do i = 0, Nxm1
-            do j = 1, Nyp
-              varxy(i, j) = kappa_t(i, NzMovie, j, n)
-            end do
-          end do
-          write (gname,'("kappa_t", I0.1 "_xz")') n
-          call WriteHDF5_XYplane(fname, gname, varxy)
-        end if
-        call mpi_barrier(mpi_comm_world, ierror)
-        if (rankY == rankymovie) then
-          do i = 0, Nxm1
-            do j = 0, Nzp - 1
-              varxz(i, j) = kappa_t(i, j, NyMovie, n)
-            end do
-          end do
-          write (gname,'("kappa_t", I0.1 "_xy")') n
-          call WriteHDF5_XZplane(fname, gname, varxz)
-        end if
-        call mpi_barrier(mpi_comm_world, ierror)
-        do i = 0, Nzp - 1
-          do j = 1, Nyp
-            varzy(i, j) = kappa_t(NxMovie, i, j, n)
-          end do
-          end do
-        write (gname,'("kappa_t", I0.1 "_yz")') n
-        call WriteHDF5_ZYplane(fname, gname, varzy)
-      end if
-
     end do
 
   end if
@@ -1561,7 +1427,6 @@ end
       call WriteStatH5_Y(fname, gname, Diag)
 
     end if
-
 
   end if
 

@@ -29,7 +29,9 @@ module parameters
   integer             update_dt, LES_start, time_nu_change
 
   real(rkind)         save_flow_dt, save_stats_dt
+  real(rkind)         save_stats_dt_fine, fine_time
   real(rkind)         save_movie_dt
+  real(rkind)         Tb, nb_period, base_time
 
   logical             create_new_th(1:N_th)
   real(rkind)         Ri(1:N_th), Pr(1:N_th)
@@ -68,7 +70,7 @@ module parameters
   integer jpert, test_rank
 
   ! Sponge parameters
-  real (rkind) Svel_amp, Sb_amp, S_depth
+  real (rkind) Svel_amp, Sb_amp, S_depth, Svel_side_amp, S_side_depth
 
   ! Forcing parameters
   real (rkind) tau_sponge
@@ -79,6 +81,7 @@ module parameters
 
   real(rkind) b_factor, phi_factor
   real(rkind) phi_min, phi_max, b_min, b_max, db, dphi, vd_zmin
+  integer ranky_vd_zmin, Ny_vd_zmin
 
   real(rkind) source_vol, vol, flux_volume
 
@@ -118,7 +121,7 @@ contains
     !   (Note - if you change the following section of code, update the
     !    CURRENT_VERSION number to make obsolete previous input files !)
 
-    current_version = 3.9
+    current_version = 3.12
     read (11, *)
     read (11, *)
     read (11, *)
@@ -141,6 +144,8 @@ contains
       variable_dt, CFL, update_dt
     read (11, *)
     read (11, *) verbosity, save_flow_dt, save_stats_dt, save_movie_dt, XcMovie, ZcMovie, YcMovie
+    read (11, *)
+    read (11, *) save_stats_dt_fine, base_time, nb_period
     read (11, *)
     ! Read in the parameters for the N_th scalars
     do n = 1, N_th
@@ -178,7 +183,6 @@ contains
       call input_chan
       call create_grid_chan
       call init_chan_mpi
-      YcMovie = vd_zmin
       if (save_movie_dt /= 0) then
         call init_chan_movie
       end if
@@ -186,6 +190,21 @@ contains
       stop 'Error: Duct not implemented!'
     elseif (num_per_dir == 0) then
       stop 'Error: Cavity not implemented!'
+    end if
+
+    ! Set time limit based on variables in input_chan
+    Tb = int(100.d0 * 2.d0*4.*atan(1.0)/sqrt(N2) + 0.5)/100.d0 ! round to 2 decimal places
+    time_limit = (base_time + nb_period)*Tb
+    fine_time = base_time*Tb
+    save_stats_dt_fine = save_stats_dt_fine * Tb
+    save_stats_dt = save_stats_dt * Tb
+
+    if (rank == 0) then
+      write(*,'("Buoyancy period T_b = ", ES12.5)') Tb
+      write(*,'("Running until t = ", ES12.5)') fine_time
+      write(*,'("Saving stats every ", ES12.5)') save_stats_dt
+      write(*,'("Then, run until t = ", ES12.5)') time_limit
+      write(*,'("Saving stats every ", ES12.5)') save_stats_dt_fine
     end if
 
     ! Now plume variables read, set perturbation level
@@ -201,6 +220,22 @@ contains
       do while (gy(jpert) < Lyc+Lyp)
         jpert = jpert + 1
       end do
+    end if
+
+    ! Find index and rank for vd_zmin
+    ranky_vd_zmin = -1
+    if (gyf(jstart) <= vd_zmin .and. gyf(jend + 1) > vd_zmin) then
+      ranky_vd_zmin = rankY
+      i = 1
+      do while (.not. &
+                (gyf(i) <= vd_zmin .and. gyf(i + 1) > vd_zmin))
+        i = i + 1
+      end do
+      Ny_vd_zmin = i;
+    end if
+    if (rankY == ranky_vd_zmin) then
+        write (*, *) "vd zmin index", Ny_vd_zmin
+        write (*, *) "vd zmin rank", ranky_vd_zmin
     end if
 
     if (rank == 0) &
@@ -251,7 +286,7 @@ contains
     open (11, file='input_chan.dat', form='formatted', status='old')
     ! Read input file.
 
-    current_version = 3.9
+    current_version = 3.12
     read (11, *)
     read (11, *)
     read (11, *)
@@ -282,6 +317,8 @@ contains
     read (11, *) Lyc, Lyp, H, N2
     read (11, *)
     read (11, *) Svel_amp, Sb_amp, S_depth
+    read (11, *)
+    read (11, *) Svel_side_amp, S_side_depth
     read (11, *)
     read (11, *) Nb, Nphi, b_factor, phi_factor
     read (11, *)
@@ -325,9 +362,12 @@ contains
     db = (b_max - b_min) / Nb
     dphi = (phi_max - phi_min) / Nphi
 
-    vd_zmin = H - 0.4d0*(F0**(0.25d0)) * (N2**(-0.375d0))  
+    vd_zmin = H - 0.25d0*(F0**(0.25d0)) * (N2**(-0.375d0))  
     !!! With current forcing strength, SL interface is pushed upwards!
-    write (*, *) "vd zmin", vd_zmin
+    if (rank == 0) then
+      write (*, *) "vd zmin", vd_zmin
+    end if
+
     
     Nb_out = int(ceiling(real(Nb)/NprocZ) * NprocZ)
     Nphi_out = int(ceiling(real(Nphi)/NprocZ) * NprocZ)
@@ -358,7 +398,7 @@ contains
     do i = 1, Nb
       bbins(i) = b_min + (i-0.5d0)*db
       bbins_out(i) = b_min + (i-0.5d0)*db
-      if (rank == 0) write(*,*) "BBIN", i, bbins(i)
+      !if (rank == 0) write(*,*) "BBIN", i, bbins(i)
     end do
 
     do i = Nb + 1, Nb_out
@@ -368,7 +408,7 @@ contains
     do i = 1, Nphi
       phibins(i) = phi_min + (i-0.5d0)*dphi
       phibins_out(i) = phi_min + (i-0.5d0)*dphi
-      if (rank == 0) write(*,*) "PHIBIN", i, phibins(i)
+      !if (rank == 0) write(*,*) "PHIBIN", i, phibins(i)
     end do
 
     do i = Nphi + 1, Nphi_out

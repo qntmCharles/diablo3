@@ -9,21 +9,18 @@ module flow
   ! Flow !
 
   ! 3D
-  real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1,s2,s3,s4,s5,s6,s7, &
+  real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1,s2,s3,s4,s5, s6, &
                                                            ur, utheta, u_sfluc, v_sfluc, w_sfluc, b_sfluc, &
-                                                           chi_field, Ri_field, Re_b_field, N2_field, &
-                                                           tked_field, pdf_field, pvd_field, B_field
+                                                           th_sfluc, nlwf_yz, nlwf_xz, tked_field
+
   complex(rkind), pointer, contiguous, dimension(:,:,:) :: cu1,cu2,cu3,cp,cr1,cr2,cr3,cf1,cf2,cf3, &
-                                                           cs1,cs2,cs3,cs4, cs5, cs6, cs7, cur, cutheta, cu_sfluc, &
-                                                           cv_sfluc, cw_sfluc, cb_sfluc, &
-                                                           cchi_field, cRi_field, cRe_b_field, cN2_field, &
-                                                           ctked_field, cpdf_field, cpvd_field, cB_field
+                                                           cs1,cs2,cs3,cs4, cs5, cs6, cur, cutheta, cu_sfluc, &
+                                                           cv_sfluc, cw_sfluc, cb_sfluc, cth_sfluc, &
+                                                           cnlwf_xz, cnlwf_yz, ctked_field
 
   ! 4D
-  real(rkind), pointer, contiguous, dimension(:,:,:,:) :: th,fth,rth, th_mem, th_forcing, ath_forcing, rth_forcing
-  complex(rkind), pointer, contiguous, dimension(:,:,:,:) :: cth,cfth,crth, cth_mem, cth_forcing, cath_forcing, &
-          crth_forcing
-
+  real(rkind), pointer, contiguous, dimension(:,:,:,:) :: th,fth,rth, th_mem
+  complex(rkind), pointer, contiguous, dimension(:,:,:,:) :: cth,cfth,crth, cth_mem
 
 
   ! LES !
@@ -87,6 +84,8 @@ module flow
   real(rkind) epsilon(0:Nyp+1), epsilon_m(0:Nyp+1)
  
   real(rkind) dt_mem
+
+  real(rkind) strat_top
 
 
 
@@ -202,7 +201,6 @@ contains
     call alloc_array3D(s4,cs4)
     call alloc_array3D(s5,cs5)
     call alloc_array3D(s6,cs6)
-    call alloc_array3D(s7,cs7)
 
     call alloc_array3D(ur,cur)
     call alloc_array3D(utheta,cutheta)
@@ -210,23 +208,15 @@ contains
     call alloc_array3D(v_sfluc,cv_sfluc)
     call alloc_array3D(w_sfluc,cw_sfluc)
     call alloc_array3D(b_sfluc,cb_sfluc)
-
-    call alloc_array3D(chi_field,cchi_field)
-    call alloc_array3D(Ri_field,cRi_field)
-    call alloc_array3D(Re_b_field,cRe_b_field)
-    call alloc_array3D(tked_field,ctked_field)
-    call alloc_array3D(N2_field,cN2_field)
-    call alloc_array3D(pdf_field,cpdf_field)
-    call alloc_array3D(pvd_field,cpvd_field)
-    call alloc_array3D(B_field,cB_field)
+    call alloc_array3D(th_sfluc,cth_sfluc)
+    call alloc_array3D(nlwf_xz, cnlwf_xz)
+    call alloc_array3D(nlwf_yz, cnlwf_yz)
+    call alloc_array3D(tked_field, ctked_field)
 
     call alloc_array4D(th, cth)   ! Not using the same memory!
     call alloc_array4D(fth,cfth)
     call alloc_array4D(rth,crth)
     call alloc_array4D(th_mem,cth_mem)
-    call alloc_array4D(th_forcing,cth_forcing)
-    call alloc_array4D(ath_forcing,cath_forcing)
-    call alloc_array4D(rth_forcing,crth_forcing)
 
   end
 
@@ -613,7 +603,7 @@ contains
 
 
     integer i, j, k, n
-    real(rkind) ttop, tmid, rnum1
+    real(rkind) ttop, tmid
 
     do n = 1, N_th
       if (create_new_th(n)) then
@@ -707,69 +697,47 @@ contains
         do k = 0, Nzp - 1
           do i = 0, Nxm1
             do j = 1, Nyp
-              if (n == 3) then
-                  call random_number(rnum1)
-                  th(i, k, j, n) = rnum1 * phic_noise
-              else if (n == 2) then
-                !th(i, k, j, n) = 0.d0
-                  call random_number(rnum1)
-                  th(i, k, j, n) = rnum1 * phic_noise
-              else if (n == 1) then
-                if (gyf(j) < H) then
-                  th(i, k, j, n) = 0.d0
-                else
-                  th(i, k, j, n) = N2 * (gyf(j) - H)
-                end if
+              if (gyf(j) < H) then
+                th(i, k, j, n) = 0.d0
+              else if (n == 1) then !only want buoyancy to have stratification
+                th(i, k, j, n) = N2 * (gyf(j) - H)
+              else
+                th(i, k, j, n) = 0.d0
               end if
             end do
           end do
         end do
         else if (IC_type == 11) then
-        ! Stratification matching Ansong & Sutherland (2010) experiment, fixed initial tracer
+        ! Two-layer buoyancy setup
         do k = 0, Nzp - 1
           do i = 0, Nxm1
             do j = 1, Nyp
-              if (n==1) then 
-                if (gyf(j) < H) then
-                  th(i, k, j, n) = 0.d0
-                else 
-                  th(i, k, j, n) = N2 * (gyf(j) - H)
-                end if
-              else if (n==2) then
-                if (gyf(j) < H) then
-                  th(i, k, j, n) = 0.1d0
-                else
-                  th(i, k, j, n) = 0.d0
-                end if 
+              if (gyf(j) < H) then
+                th(i, k, j, n) = 0.d0
+              else if (n == 1) then !only want buoyancy to have a jump
+                th(i, k, j, n) = 2.d0 * F0**(0.25d0) * sqrt(N2)**(1.25d0)
+              else
+                th(i, k, j, n) = 0.d0
               end if
             end do
           end do
         end do
         else if (IC_type == 12) then
-        ! Stratification matching Ansong & Sutherland (2010) experiment, two tracers
-        ttop = 0.35d0
-        tmid = 0.3d0
+        ! Linear stratification between H and H + 0.1
+        strat_top = 0.02d0
         do k = 0, Nzp - 1
           do i = 0, Nxm1
             do j = 1, Nyp
-              if (n==1) then 
-                if (gyf(j) < H) then
-                  th(i, k, j, n) = 0.d0
-                else 
-                  th(i, k, j, n) = N2 * (gyf(j) - H)
-                end if
-              else if (n==2) then
+              if (gyf(j) < H) then
                 th(i, k, j, n) = 0.d0
-              else if (n==3) then
-                if (gyf(j) < H) then
-                  th(i, k, j, n) = 0.d0
-                else if (gyf(j) < tmid) then
-                  th(i, k, j, n) = (gyf(j) - H)
-                else if (gyf(j) < ttop) then
-                  th(i, k, j, n) = ((tmid-H)/(ttop-tmid)) * (ttop - gyf(j))
+              else if (n == 1) then !only want buoyancy to have stratification
+                if (gyf(j) < H + strat_top) then
+                  th(i, k, j, n) = N2 * (gyf(j) - H)
                 else
-                  th(i, k, j, n) = 0.d0
-                end if 
+                  th(i, k, j, n) = N2 * strat_top
+                end if
+              else
+                th(i, k, j, n) = 0.d0
               end if
             end do
           end do
@@ -806,29 +774,6 @@ contains
 
     call mpi_barrier(mpi_comm_world, ierror)
     call ReadHDF5(fname)
-
-    if (rank == 0) then
-      gname = 'b_phiv_S_mem'
-      call ReadHDF5_plane(fname, gname, b_phiv_S_mem)
-
-      write(*,*) "FLUX", b_phiv_S_mem(1,1)
-      
-      gname = 'b_phiv_S_cum'
-      call ReadHDF5_plane(fname, gname, b_phiv_S_cum)
-      gname = 'Ent_phiv_flux_mem'
-      call ReadHDF5_plane(fname, gname, Ent_phiv_flux_mem)
-      gname = 'Ent_phiv_flux_cum'
-      call ReadHDF5_plane(fname, gname, Ent_phiv_flux_cum)
-
-      gname = 'b_phic_S_mem'
-      call ReadHDF5_plane(fname, gname, b_phic_S_mem)
-      gname = 'b_phic_S_cum'
-      call ReadHDF5_plane(fname, gname, b_phic_S_cum)
-      gname = 'Ent_phic_flux_mem'
-      call ReadHDF5_plane(fname, gname, Ent_phic_flux_mem)
-      gname = 'Ent_phic_flux_cum'
-      call ReadHDF5_plane(fname, gname, Ent_phic_flux_cum)
-    end if
 
     ! Apply initial boundary conditions, set ghost cells
     call apply_BC_vel_mpi_post
@@ -869,28 +814,6 @@ contains
     call mpi_barrier(mpi_comm_world, ierror)
     call WriteHDF5(fname, save_pressure)
 
-    if (rank == 0) then
-      gname = 'b_phiv_S_mem'
-      call WriteHDF5_plane(fname, gname, b_phiv_S_mem)
-      write(*,*) "FLUX", b_phiv_S_mem(1,1)
-
-      gname = 'b_phiv_S_cum'
-      call WriteHDF5_plane(fname, gname, b_phiv_S_cum)
-      gname = 'Ent_phiv_flux_cum'
-      call WriteHDF5_plane(fname, gname, Ent_phiv_flux_cum)
-      gname = 'Ent_phiv_flux_mem'
-      call WriteHDF5_plane(fname, gname, Ent_phiv_flux_mem)
-
-      gname = 'b_phic_S_mem'
-      call WriteHDF5_plane(fname, gname, b_phic_S_mem)
-      gname = 'b_phic_S_cum'
-      call WriteHDF5_plane(fname, gname, b_phic_S_cum)
-      gname = 'Ent_phic_flux_cum'
-      call WriteHDF5_plane(fname, gname, Ent_phic_flux_cum)
-      gname = 'Ent_phic_flux_mem'
-      call WriteHDF5_plane(fname, gname, Ent_phic_flux_mem)
-    end if
-
     call wall_time(end_wall_time)
     if (rank == 0) &
       write (*,'("Elapsed Wall Time to Save Flow: ", ES12.5)') (end_wall_time - wall_begin)
@@ -926,18 +849,11 @@ subroutine courant
   ! The subroutine should be called with the velocity in physical space
 
   real(rkind) dt_x, dt_y, dt_z
-  real(rkind) dt_sat, CFLsat, phi_vs, eps_sat
   real(rkind) Nmax
   integer i, j, k, n
   integer imin, jmin, kmin
   real(rkind) r_max ! Maximum fractional change in dt
   real(rkind) nu_t_max, kappa_t_max(1:N_th)
-
-  real(rkind) satcount
-
-  ! Set CFL number for saturation adjustment
-  CFLsat = 0.1d0
-  eps_sat = 1.d-3
 
   ! Set the initial dt to some arbitrary large number
   dt = 1.d0
@@ -972,8 +888,6 @@ subroutine courant
     end if
   end do
 
-  if (rank == 0) & write(*,*) dt
-
   ! Make sure we capture the Geostrophic Flow-through time
   !   because the split advection component may still be at most Vg !
   !dt=min(dt,min(dx(1),dy(1))/(LY*delta/Ro_inv*dTHdX))
@@ -997,38 +911,20 @@ subroutine courant
       end do
     end do
   else
-    satcount = 0.d0
     do j = 1, Nyp
       do k = 0, Nzp - 1
         do i = 0, Nxm1
           dt_x = CFL * dx(i) / abs(u1(i, k, j))
-          dt_y = CFL * dy(j) / abs(u2(i, k, j)-w_sediment)
+          dt_y = CFL * dy(j) / abs(u2(i, k, j))
           dt_z = CFL * dz(k) / abs(u3(i, k, j))
-
-          phi_vs = q0 * exp(alpha_m * (th(i, k, j, 1) - beta_m * gyf(j)))
-          if (th(i, k, j, 2) > phi_vs) then
-            dt_sat = CFLsat * abs((th(i, k, j, 2)*tau_m)/(th(i, k, j, 2) - phi_vs)) ! phi_v adjustment
-
-            !dt_sat = min(dt_sat, &
-                !CFLsat * abs(((eps_sat + th(i, k, j, 3))*tau_m)/(th(i, k, j, 2) - phi_vs)))   ! phi_c adjustment
-
-            dt = min(dt, dt_x, dt_y, dt_z, dt_sat)
-            satcount = satcount+1.d0
-          else
-            dt = min(dt, dt_x, dt_y, dt_z)
-          end if
+          dt = min(dt, dt_x, dt_y, dt_z)
         end do
       end do
     end do
   end if
-
-  call mpi_allreduce(mpi_in_place, satcount, 1, mpi_double_precision, &
-      mpi_sum, mpi_comm_world, ierror)
-  if (rank == 0) write(*,*) satcount
+  if (rank == 0) & write(*,*) "dt", dt
 
   call get_minimum_mpi(dt)
-
-  if (rank == 0) & write(*,*) dt
 
   if (dt <= 0) then
     if (rank == 0) &

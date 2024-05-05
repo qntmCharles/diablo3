@@ -9,20 +9,24 @@ module flow
   ! Flow !
 
   ! 3D
-  real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1,s2,s3,s4,s5,s6,s7, &
+  real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1,s2,s3,s4, s5, &
                                                            ur, utheta, u_sfluc, v_sfluc, w_sfluc, b_sfluc, &
                                                            chi_field, Ri_field, Re_b_field, N2_field, &
                                                            tked_field, pdf_field, pvd_field, B_field
   complex(rkind), pointer, contiguous, dimension(:,:,:) :: cu1,cu2,cu3,cp,cr1,cr2,cr3,cf1,cf2,cf3, &
-                                                           cs1,cs2,cs3,cs4, cs5, cs6, cs7, cur, cutheta, cu_sfluc, &
+                                                           cs1,cs2,cs3,cs4, cs5, cur, cutheta,  &
+                                                           cu_sfluc, &
                                                            cv_sfluc, cw_sfluc, cb_sfluc, &
                                                            cchi_field, cRi_field, cRe_b_field, cN2_field, &
                                                            ctked_field, cpdf_field, cpvd_field, cB_field
 
   ! 4D
-  real(rkind), pointer, contiguous, dimension(:,:,:,:) :: th,fth,rth, th_mem, th_forcing, ath_forcing, rth_forcing
-  complex(rkind), pointer, contiguous, dimension(:,:,:,:) :: cth,cfth,crth, cth_mem, cth_forcing, cath_forcing, &
-          crth_forcing
+  real(rkind), pointer, contiguous, dimension(:,:,:,:) :: th,fth,rth, th_mem, th_forcing, ath_forcing, &
+                                                            rth_forcing, mth_forcing, amth_forcing, &
+                                                            sth_forcing, asth_forcing, s6
+  complex(rkind), pointer, contiguous, dimension(:,:,:,:) :: cth,cfth,crth, cth_mem, cth_forcing, &
+                                                            cath_forcing, crth_forcing, cmth_forcing, &
+                                                            camth_forcing, csth_forcing, casth_forcing, cs6
 
 
 
@@ -158,6 +162,11 @@ contains
       save_stats_time = save_stats_dt
       save_movie_time = save_movie_dt
       time_step = 0
+      if (.not. duration_flag) then ! Tf is duration from beginning of simulation
+        Tf = Tf - time
+      else if (check_flux) then ! Make Tf arbitrarily large so that plume can reach penetration
+        Tf = 1000.d0
+      end if
       time = 0
 
       write_bins_flag = .true.
@@ -201,8 +210,6 @@ contains
     call alloc_array3D(s3,cs3)
     call alloc_array3D(s4,cs4)
     call alloc_array3D(s5,cs5)
-    call alloc_array3D(s6,cs6)
-    call alloc_array3D(s7,cs7)
 
     call alloc_array3D(ur,cur)
     call alloc_array3D(utheta,cutheta)
@@ -227,6 +234,11 @@ contains
     call alloc_array4D(th_forcing,cth_forcing)
     call alloc_array4D(ath_forcing,cath_forcing)
     call alloc_array4D(rth_forcing,crth_forcing)
+    call alloc_array4D(mth_forcing,cmth_forcing)
+    call alloc_array4D(amth_forcing,camth_forcing)
+    call alloc_array4D(sth_forcing,csth_forcing)
+    call alloc_array4D(asth_forcing,casth_forcing)
+    call alloc_array4D(s6, cs6)
 
   end
 
@@ -434,7 +446,61 @@ contains
           end do
         end do
       end do
-    else if (IC_type >= 9) then
+    else if (IC_type == 10) then
+      ! Shear in stratified layer
+      if (shear_type == 1) then
+        if (rank == 0) write(*,*) "Setting stepped parabolic shear as initial condition."
+        do j = 0, Nyp
+          do k = 0, Nzp - 1
+            do i = 0, Nxm1
+              if ((gyf(j) > H).and.(gyf(j) < smax_height)) then
+                u1(i,k,j) = srate * (gyf(j) - H)
+              else if (gyf(j) > smax_height) then
+                u1(i,k,j) = -srate*(1/(szero_height-smax_height) + &
+                        (szero_height - H)/(szero_height - smax_height)**2.d0) * (gyf(j) - smax_height)**2.d0 + &
+                        srate * (gyf(j) - smax_height) + srate*(smax_height - H)
+              else
+                u1(i, k, j) = 0.d0
+              end if
+              u2(i, k, j) = 0.d0
+              u3(i, k, j) = 0.d0
+            end do
+          end do
+        end do
+      else if (shear_type == 2) then
+        if (rank == 0) write(*,*) "Setting parabolic shear as initial condition."
+        do j = 0, Nyp
+          do k = 0, Nzp - 1
+            do i = 0, Nxm1
+              if (gyf(j) > H) then
+                u1(i, k, j) = -1.d0 * (srate/(Ly-H)) * (gyf(j) - H) * (gyf(j) - Ly)
+              else
+                u1(i, k, j) = 0.d0
+              end if
+              u2(i, k, j) = 0.d0
+              u3(i, k, j) = 0.d0
+            end do
+          end do
+        end do
+      else if (shear_type == 3) then
+        if (rank == 0) write(*,*) "Setting stepped linear shear as initial condition."
+        do j = 0, Nyp+1
+          do k = 0, Nzp - 1
+            do i = 0, Nxm1
+              if ((gyf(j) > H).and.(gyf(j) < smax_height)) then
+                u1(i, k, j) = srate * (gyf(j) - H)
+              else if (gyf(j) > smax_height) then
+                u1(i, k, j) = srate * (smax_height - H)
+              else
+                u1(i, k, j) = 0.d0
+              end if
+              u2(i, k, j) = 0.d0
+              u3(i, k, j) = 0.d0
+            end do
+          end do
+        end do
+      end if
+    else if (IC_type >= 11) then
       ! Quiescent
       do j = 0, Nyp
         do k = 0, Nzp - 1
@@ -702,74 +768,21 @@ contains
             end do
           end do
         end do
-        else if (IC_type == 10) then
-        ! Stratification matching Ansong & Sutherland (2010) experiment, no initial tracer
+        else if (IC_type >= 10) then
+        ! Linear stably stratified layer, random noise applied to all fields
         do k = 0, Nzp - 1
           do i = 0, Nxm1
             do j = 1, Nyp
-              if (n == 3) then
-                  call random_number(rnum1)
-                  th(i, k, j, n) = rnum1 * phic_noise
-              else if (n == 2) then
-                !th(i, k, j, n) = 0.d0
-                  call random_number(rnum1)
-                  th(i, k, j, n) = rnum1 * phic_noise
+              if (n > 1) then
+                call random_number(rnum1)
+                th(i, k, j, n) = rnum1 * init_noise
               else if (n == 1) then
                 if (gyf(j) < H) then
-                  th(i, k, j, n) = 0.d0
+                  call random_number(rnum1)
+                  th(i, k, j, n) = rnum1 * init_noise
                 else
                   th(i, k, j, n) = N2 * (gyf(j) - H)
                 end if
-              end if
-            end do
-          end do
-        end do
-        else if (IC_type == 11) then
-        ! Stratification matching Ansong & Sutherland (2010) experiment, fixed initial tracer
-        do k = 0, Nzp - 1
-          do i = 0, Nxm1
-            do j = 1, Nyp
-              if (n==1) then 
-                if (gyf(j) < H) then
-                  th(i, k, j, n) = 0.d0
-                else 
-                  th(i, k, j, n) = N2 * (gyf(j) - H)
-                end if
-              else if (n==2) then
-                if (gyf(j) < H) then
-                  th(i, k, j, n) = 0.1d0
-                else
-                  th(i, k, j, n) = 0.d0
-                end if 
-              end if
-            end do
-          end do
-        end do
-        else if (IC_type == 12) then
-        ! Stratification matching Ansong & Sutherland (2010) experiment, two tracers
-        ttop = 0.35d0
-        tmid = 0.3d0
-        do k = 0, Nzp - 1
-          do i = 0, Nxm1
-            do j = 1, Nyp
-              if (n==1) then 
-                if (gyf(j) < H) then
-                  th(i, k, j, n) = 0.d0
-                else 
-                  th(i, k, j, n) = N2 * (gyf(j) - H)
-                end if
-              else if (n==2) then
-                th(i, k, j, n) = 0.d0
-              else if (n==3) then
-                if (gyf(j) < H) then
-                  th(i, k, j, n) = 0.d0
-                else if (gyf(j) < tmid) then
-                  th(i, k, j, n) = (gyf(j) - H)
-                else if (gyf(j) < ttop) then
-                  th(i, k, j, n) = ((tmid-H)/(ttop-tmid)) * (ttop - gyf(j))
-                else
-                  th(i, k, j, n) = 0.d0
-                end if 
               end if
             end do
           end do
@@ -810,9 +823,6 @@ contains
     if (rank == 0) then
       gname = 'b_phiv_S_mem'
       call ReadHDF5_plane(fname, gname, b_phiv_S_mem)
-
-      write(*,*) "FLUX", b_phiv_S_mem(1,1)
-      
       gname = 'b_phiv_S_cum'
       call ReadHDF5_plane(fname, gname, b_phiv_S_cum)
       gname = 'Ent_phiv_flux_mem'
@@ -828,6 +838,15 @@ contains
       call ReadHDF5_plane(fname, gname, Ent_phic_flux_mem)
       gname = 'Ent_phic_flux_cum'
       call ReadHDF5_plane(fname, gname, Ent_phic_flux_cum)
+
+      gname = 'b_phip_S_mem'
+      call ReadHDF5_plane(fname, gname, b_phip_S_mem)
+      gname = 'b_phip_S_cum'
+      call ReadHDF5_plane(fname, gname, b_phip_S_cum)
+      gname = 'Ent_phip_flux_mem'
+      call ReadHDF5_plane(fname, gname, Ent_phip_flux_mem)
+      gname = 'Ent_phip_flux_cum'
+      call ReadHDF5_plane(fname, gname, Ent_phip_flux_cum)
     end if
 
     ! Apply initial boundary conditions, set ghost cells
@@ -872,8 +891,6 @@ contains
     if (rank == 0) then
       gname = 'b_phiv_S_mem'
       call WriteHDF5_plane(fname, gname, b_phiv_S_mem)
-      write(*,*) "FLUX", b_phiv_S_mem(1,1)
-
       gname = 'b_phiv_S_cum'
       call WriteHDF5_plane(fname, gname, b_phiv_S_cum)
       gname = 'Ent_phiv_flux_cum'
@@ -889,6 +906,15 @@ contains
       call WriteHDF5_plane(fname, gname, Ent_phic_flux_cum)
       gname = 'Ent_phic_flux_mem'
       call WriteHDF5_plane(fname, gname, Ent_phic_flux_mem)
+
+      gname = 'b_phip_S_mem'
+      call WriteHDF5_plane(fname, gname, b_phip_S_mem)
+      gname = 'b_phip_S_cum'
+      call WriteHDF5_plane(fname, gname, b_phip_S_cum)
+      gname = 'Ent_phip_flux_cum'
+      call WriteHDF5_plane(fname, gname, Ent_phip_flux_cum)
+      gname = 'Ent_phip_flux_mem'
+      call WriteHDF5_plane(fname, gname, Ent_phip_flux_mem)
     end if
 
     call wall_time(end_wall_time)
@@ -933,7 +959,6 @@ subroutine courant
   real(rkind) r_max ! Maximum fractional change in dt
   real(rkind) nu_t_max, kappa_t_max(1:N_th)
 
-  real(rkind) satcount
 
   ! Set CFL number for saturation adjustment
   CFLsat = 0.1d0
@@ -972,8 +997,6 @@ subroutine courant
     end if
   end do
 
-  if (rank == 0) & write(*,*) dt
-
   ! Make sure we capture the Geostrophic Flow-through time
   !   because the split advection component may still be at most Vg !
   !dt=min(dt,min(dx(1),dy(1))/(LY*delta/Ro_inv*dTHdX))
@@ -997,7 +1020,6 @@ subroutine courant
       end do
     end do
   else
-    satcount = 0.d0
     do j = 1, Nyp
       do k = 0, Nzp - 1
         do i = 0, Nxm1
@@ -1013,7 +1035,6 @@ subroutine courant
                 !CFLsat * abs(((eps_sat + th(i, k, j, 3))*tau_m)/(th(i, k, j, 2) - phi_vs)))   ! phi_c adjustment
 
             dt = min(dt, dt_x, dt_y, dt_z, dt_sat)
-            satcount = satcount+1.d0
           else
             dt = min(dt, dt_x, dt_y, dt_z)
           end if
@@ -1022,13 +1043,7 @@ subroutine courant
     end do
   end if
 
-  call mpi_allreduce(mpi_in_place, satcount, 1, mpi_double_precision, &
-      mpi_sum, mpi_comm_world, ierror)
-  if (rank == 0) write(*,*) satcount
-
   call get_minimum_mpi(dt)
-
-  if (rank == 0) & write(*,*) dt
 
   if (dt <= 0) then
     if (rank == 0) &

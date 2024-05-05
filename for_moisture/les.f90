@@ -1299,33 +1299,6 @@ end
                  * (dthetadz(i, k, j, n)*dyf(j-1) + dthetadz(i, k, j - 1, n) * dyf(j)) &
                                        / (2.d0*dy(j)) &
                  )
-            !DEBUG
-            if (temp_th(i, k, j) - 1.d0 == temp_th(i, k, j)) then
-                write(*,*) gx(i), gz(rankZ*Nzp+k), gyf(j)
-                write(*,*) dthetadx(i, k, j, n), dthetadx(i, k, j-1, n)
-                write(*,*) dthetadz(i, k, j, n), dthetadz(i, k, j-1, n)
-                write(*,*) dthetady(i, k, j, n)
-                write(*,*) du1dx(i, k, j), du1dx(i, k, j-1)
-                write(*,*) du1dy(i, k, j)
-                write(*,*) du1dz(i, k, j), du1dz(i, k, j-1)
-                write(*,*) du2dy(i, k, j), du2dy(i, k, j-1)
-                write(*,*) du3dz(i, k, j), du3dz(i, k, j-1)
-                write(*,*) du3dx(i, k, j), du3dx(i, k, j-1)
-                write(*,*) du2dz(i, k, j), du3dy(i, k, j)
-            end if
-            if ((time_step > 100).and.(n==3)) then
-              if ((gyf(j) < 0.15d0).and.(gyf(j+1) > 0.15d0)) then
-                if ((gx(i) == gz(rankZ*Nzp + k)).and.(gx(i) == 0.3d0)) then
-                  write(*,*) "normalisation factor"
-                  write(*,*) ((deltax * (dthetadx(i, k, j, n) * dyf(j-1) + &
-                            dthetadx(i, k, j - 1, n) * dyf(j)) / (2.d0*dy(j)))**2 &
-                            + (deltay * dthetady(i, k, j, n))**2 &
-                            + (deltaz * (dthetadz(i, k, j, n) * dyf(j-1) &
-                            + dthetadz(i, k, j - 1, n) * dyf(j)) / (2.d0*dy(j)))**2)
-                end if
-              end if
-            end if
-            !DEBUG
 
             if (temp_th(i, k, j) <= 0.0d0) then
               temp_th(i, k, j) = 0.0d0
@@ -1336,42 +1309,11 @@ end
               + (deltay * dthetady(i, k, j, n))**2 &
               + (deltaz * (dthetadz(i, k, j, n) * dyf(j-1) + dthetadz(i, k, j - 1, n) * dyf(j)) &
                                            / (2.d0*dy(j)))**2)
-            !DEBUG
-            if (temp_th(i, k, j) - 1.d0 == temp_th(i, k, j)) then
-                write(*,*) gx(i), gz(rankZ*Nzp+k), gyf(j)
-                write(*,*) dthetadx(i, k, j, n), dthetadx(i, k, j-1, n)
-                write(*,*) dthetadz(i, k, j, n), dthetadz(i, k, j-1, n)
-                write(*,*) dthetady(i, k, j, n)
-                write(*,*) du1dx(i, k, j), du1dx(i, k, j-1)
-                write(*,*) du1dy(i, k, j)
-                write(*,*) du1dz(i, k, j), du1dz(i, k, j-1)
-                write(*,*) du2dy(i, k, j), du2dy(i, k, j-1)
-                write(*,*) du3dz(i, k, j), du3dz(i, k, j-1)
-                write(*,*) du3dx(i, k, j), du3dx(i, k, j-1)
-                write(*,*) du2dz(i, k, j), du3dy(i, k, j)
-            end if
-            !DEBUG
             end if
 
           end do
         end do
       end do
-
-      ! DEBUG
-      if ((time_step > 180).and.(n==3)) then
-        debug_sum = 0.d0
-        do k = 0, Nzp -1
-          do i = 0, Nxm1
-            do j = jstart_th(3), jend_th(3)
-                debug_sum = debug_sum + temp_th(i, k, j)
-            end do
-          end do
-        end do
-        call mpi_allreduce(mpi_in_place, debug_sum, 1, &
-                         mpi_double_precision, mpi_sum, mpi_comm_world, ierror)
-        if (rank == 0) write(*,*) "temp_th"
-        if (rank == 0) write(*,*) debug_sum
-      end if
 
       ! Now, compute s1_th*dthetadx_i, storing in dthetadx_i
       ! Need only to compute at GYF points
@@ -1422,22 +1364,6 @@ end
         end do
       end do
 
-      ! DEBUG
-      if ((time_step > 180).and.(n==3)) then
-        debug_sum = 0.d0
-        do k = 0, Nzp -1
-          do i = 0, Nxm1
-            do j = jstart_th(3), jend_th(3)
-                debug_sum = debug_sum + kappa_t(i, k, j, 3)
-            end do
-          end do
-        end do
-        call mpi_allreduce(mpi_in_place, debug_sum, 1, &
-                         mpi_double_precision, mpi_sum, mpi_comm_world, ierror)
-        if (rank == 0) write(*,*) "kappa_t"
-        if (rank == 0) write(*,*) debug_sum
-      end if
-
       ! Now that we have calculated kappa_t, set the value at the ghost cells
       ! by sharing with neighboring processes.  This subroutine also sets
       ! the value of kappa_t to zero at both walls
@@ -1474,24 +1400,6 @@ end
           end do
         end do
       end do
-
-      ! DEBUG
-      if ((time_step > 180).and.(n==3)) then
-        call fft_xz_to_physical(cfth(:, :, :, 3), fth(:, :, :, 3))
-        debug_sum = 0.d0
-        do k = 0, Nzp -1
-          do i = 0, Nxm1
-            do j = jstart_th(3), jend_th(3)
-                debug_sum = debug_sum + fth(i, k, j, 3)
-            end do
-          end do
-        end do
-        call mpi_allreduce(mpi_in_place, debug_sum, 1, &
-                         mpi_double_precision, mpi_sum, mpi_comm_world, ierror)
-        if (rank == 0) write(*,*) "fth"
-        if (rank == 0) write(*,*) debug_sum
-        call fft_xz_to_fourier(fth(:, :, :, 3), cfth(:, :, :, 3))
-      end if
 
       if (flag_save_LES .and. rk_step == 1) then
         fname = 'movie.h5'

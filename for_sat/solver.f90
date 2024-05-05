@@ -31,7 +31,7 @@
     integer i, j, k, n
 
     ! define variables
-    real(rkind) rnum1
+    real(rkind) rnum1, phi_vs
     real(rkind) w_m(0 : Ny + 1), r_m(0 : Ny + 1), b_m(0 : Ny + 1)
 
     !radius, buoyancy and vertical profiles in vertical
@@ -52,8 +52,8 @@
         do i=0, Nxm1
           call random_number(rnum1)
           s1(i,k,j) = (u2(i,k,j) - 2*w_m(j) * &
-            exp(-((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp + k)-Lz/2.d0)**2.d0) / &
-            (2.d0*r_m(j)**2.d0)) * &
+            exp(-2.d0*((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp + k)-Lz/2.d0)**2.d0) / &
+            (r_m(j)**2.d0)) * &
             (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
             (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / &
             tau_sponge
@@ -94,8 +94,8 @@
                 tau_sponge
             else
               s1(i,k,j) = (th(i,k,j,n) - 2*b_m(j) * & 
-                exp(-((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0) / &
-                (2.d0*r_m(j)**2.d0)) * &
+                exp(-2.d0*((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0) / &
+                (r_m(j)**2.d0)) * &
                 (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
                 (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / & 
                 tau_sponge
@@ -107,18 +107,23 @@
         end do
       end do
 
-      ! Apply saturation forcing to tracer
+      ! Apply saturation forcing to tracer(s)
       if (n > 1) then
-        do j = jstart_th(2), jend_th(2)
+        do j = jstart_th(n), jend_th(n)
           do k = 0, Nzp - 1
             do i = 0, Nxm1
-              if (th(i,k,j,2) > q0 * exp( alpha_m * (th(i,k,j,1) - beta_m * gyf(j)))) then
-                if (n == 2) then
-                  s1(i,k,j) = s1(i,k,j) - ((q0 * exp(alpha_m * (th(i,k,j,1) - beta_m * gyf(j)))) - th(i,k,j,2))/tau_m
-                else if (n == 3) then
-                  s1(i,k,j) = s1(i,k,j) + ((q0 * exp(alpha_m * (th(i,k,j,1) - beta_m * gyf(j)))) - th(i,k,j,2))/tau_m
+              phi_vs = q0 * exp(alpha_m * (th(i, k, j, 1) - beta_m * gyf(j)))
+              if ((1.d0/alpha_m /= 0.d0) .and. (max(th(i,k,j,2)-phi_vs, th(i,k,j,3)-phic_noise) > 0.d0)) then
+                if ((phi_vs > th(i, k, j, 2)).and.(phi_vs - th(i,k,j,2) > th(i, k, j, 3))) then
+                    phi_vs = th(i, k, j, 2) + th(i, k, j, 3) ! not enough condensate to reach saturation
                 end if
-               end if
+
+                if (n == 2) then
+                  s1(i,k,j) = s1(i,k,j) - (phi_vs - th(i,k,j,2))/tau_m
+                else if (n == 3) then
+                  s1(i,k,j) = s1(i,k,j) + (phi_vs - th(i,k,j,2))/tau_m
+                end if
+              end if
             end do
           end do
         end do
@@ -289,8 +294,7 @@
    ! Damp the perturbations towards 0
    do k = 0, twoNkz
      do i = 0, Nxp - 1
-       !if ((rankZ /= 0) .or. (i /= 0) .or. (k /= 0)) then
-       if ((i /= 0) .or. (k /= 0)) then
+       if ((rankZ /= 0) .or. (i /= 0) .or. (k /= 0)) then
          do j = jstart_th(n), jend_th(n)
            cfth(i, k, j, n) = cfth(i, k, j, n) &
                               - sponge_sigma(j) * (cth(i, k, j, n) - 0.)
@@ -299,10 +303,12 @@
      end do
    end do
    ! Damp the mean gradient towards TH_0
-   do j = jstart_th(n), jend_th(n)
-     cfth(0, 0, j, n) = cfth(0, 0, j, n) - sponge_sigma(j) &
-                        * (cth(0, 0, j, n) - th_0(j)) ! Should th_0 be in fourier space for this??
-   end do
+   if (rankZ == 0) then
+     do j = jstart_th(n), jend_th(n)
+       cfth(0, 0, j, n) = cfth(0, 0, j, n) - sponge_sigma(j) &
+                          * (cth(0, 0, j, n) - th_0(j)) 
+     end do
+   end if
 
    return
  end
@@ -441,7 +447,7 @@ subroutine sponge_vel
   ! Add damping function to explicit R-K
   do k = 0, twoNkz
     do i = 0, Nxp - 1 ! Nkx
-      if ((i /= 0) .or. (k /= 0)) then
+      if ((rankZ /= 0) .or. (i /= 0) .or. (k /= 0)) then
         do j = jstart, jend
           cf1(i, k, j) = cf1(i, k, j) - sponge_sigma(j) * (cu1(i, k, j) - 0.d0)
           cf3(i, k, j) = cf3(i, k, j) - sponge_sigma(j) * (cu3(i, k, j) - 0.d0)
@@ -454,13 +460,15 @@ subroutine sponge_vel
     end do
   end do
   ! Damp mean flow
-  do j = jstart, jend
-    cf1(0, 0, j) = cf1(0, 0, j) - sponge_sigma(j) * (cu1(0, 0, j) - u1_0(j))
-    cf3(0, 0, j) = cf3(0, 0, j) - sponge_sigma(j) * (cu3(0, 0, j) - u3_0(j))
-  end do
-  do j = 1, Nyp
-    cf2(0, 0, j) = cf2(0, 0, j) - sponge_sigma(j) * (cu2(0, 0, j) - u2_0(j))
-  end do
+  if (rankZ == 0) then
+    do j = jstart, jend
+      cf1(0, 0, j) = cf1(0, 0, j) - sponge_sigma(j) * (cu1(0, 0, j) - u1_0(j))
+      cf3(0, 0, j) = cf3(0, 0, j) - sponge_sigma(j) * (cu3(0, 0, j) - u3_0(j))
+    end do
+    do j = 1, Nyp
+      cf2(0, 0, j) = cf2(0, 0, j) - sponge_sigma(j) * (cu2(0, 0, j) - u2_0(j))
+    end do
+  end if
 
   return
 end
@@ -497,6 +505,8 @@ subroutine rk_chan_1
   real(rkind), dimension(0:Nx-1,0:Nyp+1) ::   matl,   matd,   matu, vec
   real(rkind), dimension(0:Nxp,0:Nyp+1) ::    matl_c, matd_c, matu_c
   complex(rkind), dimension(0:Nxp,0:Nyp+1) :: vec_c
+
+  real(rkind) debug_sum
 
 
   ! Define the constants that are used in the time-stepping
@@ -705,6 +715,25 @@ subroutine rk_chan_1
       end do
     end if
 
+    ! DEBUG
+    if ((time_step > 180).and.(n==3)) then
+      call fft_xz_to_physical(crth(:,:,:,3), rth(:,:,:,3))
+      debug_sum = 0.d0
+      do k = 0, Nzp -1
+        do i = 0, Nxm1
+          do j = jstart_th(3), jend_th(3)
+              debug_sum = debug_sum + rth(i, k, j, 3)
+          end do
+        end do
+      end do
+      call mpi_allreduce(mpi_in_place, debug_sum, 1, &
+                       mpi_double_precision, mpi_sum, mpi_comm_world, ierror)
+      if (rank == 0) write(*,*) "rth after adding temp3*cfth"
+      if (rank == 0) write(*,*) debug_sum
+      call fft_xz_to_fourier(rth(:,:,:,3), crth(:,:,:,3))
+    end if
+    ! END DEBUG
+
     ! Now compute the explicit R-K term Ai
     ! Compile terms of Ai in CFi which will be saved for next time step
     do j = jstart_th(n), jend_th(n)
@@ -748,6 +777,9 @@ subroutine rk_chan_1
     call les_chan ! Calculates nu_t (and applies it explicitly in horizontal for RK)
 
     call les_chan_th ! Calculates kappa_t (and applies it explicitly in horizontal for RK)
+    !do n = 1, N_th
+      !kappa_t(:, :, :, n) = nu_t(:, :, :) / 0.7d0
+    !end do
 
   else
 
@@ -1079,9 +1111,17 @@ subroutine rk_chan_1
     do j = jstart_th(n), jend_th(n)
       do k = 0, Nzp - 1
         do i = 0, Nxm1
-          s1(i, k, j) = &
-            (th(i, k, j + 1, n) * u2(i, k, j + 1) + th(i, k, j, n) * u2(i, k, j + 1) &
-             - th(i, k, j, n) * u2(i, k, j) - th(i, k, j - 1, n) * u2(i, k, j)) / (2.d0 * dyf(j))
+          if (n == 3) then 
+            s1(i, k, j) = (th(i, k, j + 1, n) * (u2(i, k, j + 1)-w_sediment) + &
+                th(i, k, j, n) * (u2(i, k, j + 1)-w_sediment) - &
+                th(i, k, j, n) * (u2(i, k, j)-w_sediment) - &
+                th(i, k, j - 1, n) * (u2(i, k, j)-w_sediment)) / (2.d0 * dyf(j))
+          else 
+            s1(i, k, j) = (th(i, k, j + 1, n) * u2(i, k, j + 1) + &
+                th(i, k, j, n) * u2(i, k, j + 1) - &
+                th(i, k, j, n) * u2(i, k, j) - &
+                th(i, k, j - 1, n) * u2(i, k, j)) / (2.d0 * dyf(j))
+          end if
         end do
       end do
     end do
@@ -1103,6 +1143,25 @@ subroutine rk_chan_1
         end do
       end do
     end do
+
+    ! DEBUG
+    if ((time_step > 180).and.(n==3)) then
+      call fft_xz_to_physical(crth(:,:,:,3), rth(:,:,:,3))
+      debug_sum = 0.d0
+      do k = 0, Nzp -1
+        do i = 0, Nxm1
+          do j = jstart_th(3), jend_th(3)
+              debug_sum = debug_sum + rth(i, k, j, 3)
+          end do
+        end do
+      end do
+      call mpi_allreduce(mpi_in_place, debug_sum, 1, &
+                       mpi_double_precision, mpi_sum, mpi_comm_world, ierror)
+      if (rank == 0) write(*,*) "rth after adding temp5*cfth"
+      if (rank == 0) write(*,*) debug_sum
+      call fft_xz_to_fourier(rth(:,:,:,3), crth(:,:,:,3))
+    end if
+    ! END DEBUG
     ! Done with computation of RHS, explicit terms for the THETA equation
     ! Transform back to physical space
 
@@ -1123,6 +1182,22 @@ subroutine rk_chan_1
         end do
       end do
     end do
+    ! DEBUG
+    if ((time_step > 180).and.(n==3)) then
+      debug_sum = 0.d0
+      do k = 0, Nzp -1
+        do i = 0, Nxm1
+          do j = jstart_th(3), jend_th(3)
+              debug_sum = debug_sum + rth(i, k, j, 3)
+          end do
+        end do
+      end do
+      call mpi_allreduce(mpi_in_place, debug_sum, 1, &
+                       mpi_double_precision, mpi_sum, mpi_comm_world, ierror)
+      if (rank == 0) write(*,*) "rth after adding vertical derivative viscous term"
+      if (rank == 0) write(*,*) debug_sum
+    end if
+    ! END DEBUG
     ! If we are using a subgrid model (LES) then add the eddy diffusivity here
     ! Note, KAPPA_T is defined at GY points
     if (use_LES) then
@@ -1139,6 +1214,23 @@ subroutine rk_chan_1
         end do
       end do
     end if
+
+    ! DEBUG
+    if ((time_step > 180).and.(n==3)) then
+      debug_sum = 0.d0
+      do k = 0, Nzp -1
+        do i = 0, Nxm1
+          do j = jstart_th(3), jend_th(3)
+              debug_sum = debug_sum + rth(i, k, j, 3)
+          end do
+        end do
+      end do
+      call mpi_allreduce(mpi_in_place, debug_sum, 1, &
+                       mpi_double_precision, mpi_sum, mpi_comm_world, ierror)
+      if (rank == 0) write(*,*) "rth after adding eddy diffusivity"
+      if (rank == 0) write(*,*) debug_sum
+    end if
+    ! END DEBUG
 
     ! -- Now, timestep the passive scalar equation --
     ! We solve the the passive scalar before the velocity so that
@@ -1203,6 +1295,23 @@ subroutine rk_chan_1
 
     ! End do number of passive scalars
   end do
+
+  ! DEBUG
+  if (time_step > 180) then
+    debug_sum = 0.d0
+    do k = 0, Nzp -1
+      do i = 0, Nxm1
+        do j = jstart_th(3), jend_th(3)
+          debug_sum = debug_sum + th(i, k, j, 3)
+        end do
+      end do
+    end do
+    call mpi_allreduce(mpi_in_place, debug_sum, 1, &
+                     mpi_double_precision, mpi_sum, mpi_comm_world, ierror)
+    if (rank == 0) write(*,*) "after timestepping"
+    if (rank == 0) write(*,*) debug_sum
+  end if
+  ! END DEBUG
 
   ! Initialize the matrix to zeros to be used for implicit solves
   ! Note that the system size is Nyp+1, but only 1..Nyp are used
@@ -1377,6 +1486,7 @@ subroutine rk_chan_1
   ! based on the CFL criteria. This won't affect the current timestep
   ! since the TEMP1, etc. variables have already been set using
   ! the current timestep
+
   if (variable_dt .and. (rk_step == 3) &
       .and. (mod(time_step, update_dt) == 0)) then
     call courant
@@ -1466,7 +1576,6 @@ subroutine rk_chan_1
 
   call rem_div_chan
 
-
   ! Now, phi is stored in CR1, use this to update the pressure field
   ! Note, here we divide by H_BAR since it was absorbed into PHI in REM_DIV
   do j = jstart, jend
@@ -1479,7 +1588,7 @@ subroutine rk_chan_1
 
   ! Fix disparities at the boundary due to the thomas algorithm in parallel
   call ghost_chan_mpi
-
+  
   return
 end
 

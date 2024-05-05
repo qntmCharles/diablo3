@@ -74,21 +74,9 @@ program diablo
       if (verbosity > 2 .and. rank == 0) write (*,*) "Now changing viscosity to ", nu
     end if
 
-    ! Reset forcing storage variable
-    th_forcing = 0.d0
-    cth_forcing = 0.d0
-    ath_forcing = 0.d0
-    cath_forcing = 0.d0
-    rth_forcing = 0.d0
-    crth_forcing = 0.d0
-
     do rk_step = 1, 3
       if (time_ad_meth == 1) call rk_chan_1
       if (time_ad_meth == 2) call rk_chan_2
-    end do
-
-    do n = 1, N_th
-      call fft_xz_to_physical(cth_forcing(:, :, :, n), th_forcing(:, :, :, n))
     end do
 
     time = time + delta_t
@@ -104,7 +92,52 @@ program diablo
 
     call end_run_mpi(flag)
 
+    ! Calculate non-linear waveforcing
+    ! All variables in Fourier space
+    ! xz
+    
+    ! Compute vorticity du/dy - dv/dx
+    do j = 1, Nyp
+      do k = 0, twoNkz
+        do i = 0, Nxp - 1
+          cs1(i, k, j) = (cu1(i, k, j + 1) - cu1(i, k, j - 1)) / (2.d0 * dyf(j)) &
+                            - cikx(i) * 0.5d0 * (cu2(i, k, j + 1) + cu2(i, k, j))
+        end do
+      end do
+    end do 
 
+    ! Move vorticity to PP
+    call fft_xz_to_physical(cs1, s1)
+    call fft_xz_to_physical(cu1, u1)
+
+    ! Compute nonlinear terms in PP
+    do j = 1, Nyp
+      do k = 0, Nzp - 1
+        do i = 0, Nxm1
+          s2(i, k, j) = u1(i, k, j) * s1(i, k, j)
+          s3(i, k, j) = 0.5d0 * (u2(i, k, j + 1) + u2(i, k, j)) * s1(i, k, j)
+        end do
+      end do
+    end do 
+
+    ! Move back to FF to compute derivatives
+    call fft_xz_to_fourier(u1, cu1)
+    call fft_xz_to_fourier(s2, cs2)
+    call fft_xz_to_fourier(s3, cs3)
+
+    do j = 1, Nyp
+      do k = 0, twoNkz
+        do i = 0, Nxp - 1
+          cnlwf_xz_dt(i, k, j) = cikx(i) * cs2(i, k, j) &
+                                 + (cs3(i, k, j + 1) - cs3(i, k, j - 1)) / (2.d0 * dyf(j))
+        end do
+      end do
+    end do 
+
+    if (time >= fine_time) then
+        save_stats_dt = save_stats_dt_fine
+        save_movie_dt = save_stats_dt_fine
+    end if
 
     ! Save statistics to an output file
     if (time >= save_stats_time) then
@@ -153,33 +186,11 @@ program diablo
 
     s1 = abs(th(:,:,:,1))
     s2 = abs(th(:,:,:,2))
-    s4 = th_forcing(:,:,:,2)
-
-    ! Update entrained flux
-    call tracer_density_cumulative_flux(s1, s2, vd_zmin, LY, Ent_phi_flux, s4)
-    Ent_phi_flux_cum = Ent_phi_flux_cum + Ent_phi_flux * dt
-
-    call tracer_density_entrainment_flux(s1, s2, vd_zmin, LY, boundary_F, s4)
-    boundary_F_cum = boundary_F_cum + boundary_F * dt
-
     s3 = u2(:,:,:)
 
     ! Update scatter plot flux weightings
-    call tracer_density_flux(s1, s2, s3, Nymovie, rankymovie, weights_flux)
+    call tracer_density_flux(s1, s2, s3, Ny_vd_zmin, ranky_vd_zmin, weights_flux)
     weights_flux_cum = weights_flux_cum + weights_flux * dt
-
-    ! Store the old scalars in th_mem
-    do n = 1, N_th
-      do j = 1, Nyp
-        do i = 0, Nxm1
-          do k = 0, Nzp - 1
-            th_mem(i, k, j, n) = th(i, k, j, n)
-          end do
-        end do
-      end do
-    end do
-    ! Store dt
-    dt_mem = dt
 
     do n = 1, N_th
       call fft_xz_to_fourier(th(:,:,:,n), cth(:,:,:,n))
@@ -191,6 +202,9 @@ program diablo
       save_flow_time = save_flow_time + save_flow_dt
       call save_flow(.false.)
     end if
+
+    ! Save nonlinear wave forcing in Fourier space
+    cnlwf_xz_dtmem = cnlwf_xz_dt
 
     if (flag) then ! We're done running
       exit

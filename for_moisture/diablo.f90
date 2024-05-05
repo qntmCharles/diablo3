@@ -49,7 +49,7 @@ program diablo
   use tools
 
   integer i, j, k, n
-  logical flag
+  logical flag, check_th_flag
 
   call init_parameters
   call init_flow
@@ -81,6 +81,10 @@ program diablo
     cath_forcing = 0.d0
     rth_forcing = 0.d0
     crth_forcing = 0.d0
+    mth_forcing = 0.d0
+    amth_forcing = 0.d0
+    sth_forcing = 0.d0
+    asth_forcing = 0.d0
 
     do rk_step = 1, 3
       if (time_ad_meth == 1) call rk_chan_1
@@ -156,17 +160,36 @@ program diablo
     s4 = th_forcing(:,:,:,2)
 
     ! Update entrained flux
-    call tracer_density_cumulative_flux(s1, s2, vd_zmin, LY, Ent_phi_flux, s4)
-    Ent_phi_flux_cum = Ent_phi_flux_cum + Ent_phi_flux * dt
-
-    call tracer_density_entrainment_flux(s1, s2, vd_zmin, LY, boundary_F, s4)
-    boundary_F_cum = boundary_F_cum + boundary_F * dt
+    call tracer_density_cumulative_flux(s1, s2, vd_zmin, LY, Ent_phiv_flux, s4, phivbins, dphiv, phiv_min)
+    Ent_phiv_flux_cum = Ent_phiv_flux_cum + Ent_phiv_flux * dt
 
     s3 = u2(:,:,:)
 
     ! Update scatter plot flux weightings
-    call tracer_density_flux(s1, s2, s3, Nymovie, rankymovie, weights_flux)
-    weights_flux_cum = weights_flux_cum + weights_flux * dt
+    call tracer_density_flux(s1, s2, s3, Nymovie, rankymovie, b_phiv_S, phivbins, dphiv, .True.)
+    b_phiv_S_cum = b_phiv_S_cum + b_phiv_S * dt
+
+    s2 = abs(th(:,:,:,4))
+    s4 = th_forcing(:,:,:,4)
+
+    ! Update entrained flux
+    call tracer_density_cumulative_flux(s1, s2, vd_zmin, LY, Ent_phip_flux, s4, phipbins, dphip, phip_min)
+    Ent_phip_flux_cum = Ent_phip_flux_cum + Ent_phip_flux * dt
+
+    ! Update scatter plot flux weightings
+    call tracer_density_flux(s1, s2, s3, Nymovie, rankymovie, b_phip_S, phipbins, dphip, .False.)
+    b_phip_S_cum = b_phip_S_cum + b_phip_S * dt
+
+    s2 = abs(th(:,:,:,3))  ! This comes after th4 so that flux_volume_c is set correctly
+    s4 = th_forcing(:,:,:,3)
+
+    ! Update entrained flux
+    call tracer_density_cumulative_flux(s1, s2, vd_zmin, LY, Ent_phic_flux, s4, phicbins, dphic, phic_min)
+    Ent_phic_flux_cum = Ent_phic_flux_cum + Ent_phic_flux * dt
+
+    ! Update scatter plot flux weightings
+    call tracer_density_flux(s1, s2, s3, Nymovie, rankymovie, b_phic_S, phicbins, dphic, .False.)
+    b_phic_S_cum = b_phic_S_cum + b_phic_S * dt
 
     ! Store the old scalars in th_mem
     do n = 1, N_th

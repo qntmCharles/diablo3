@@ -80,10 +80,9 @@ subroutine save_stats_chan(movie,final)
     call ghost_les_mpi ! Share nu_t
     call compute_TKE_diss_les
   end if
-  
-  ! Store epsilon
-  tked_field = f1
 
+  tked_field = f1
+  
   !!! TKE / RMS Velocities !!!
   call compute_TKE(movie)
 
@@ -273,154 +272,6 @@ subroutine save_stats_chan(movie,final)
     call fft_xz_to_physical(cr3, r3)
     ! (Already have th in PP)
 
-    if (n==1) then
-      N2_field = r2 ! Store vertical buoyancy gradient
-    end if
-
-    total_tracer = 0.d0
-    ! Total tracer
-    do j = 1, Nyp
-      do k = 0, Nzp - 1
-        do i = 0, Nxm1
-          if (gyf(j) >= vd_zmin) then
-            total_tracer = total_tracer + th(i,k,j,n) * dx(1) * dz(1) * dyf(j)
-          end if
-        end do
-      end do
-    end do
-
-    call mpi_allreduce(mpi_in_place, total_tracer, 1, mpi_double_precision, &
-                     mpi_sum, mpi_comm_world, ierror)
-
-    fname = 'mean.h5'
-    write (gname,'("total_th", I0.1)') n
-    call WriteHDF5_real(fname, gname, total_tracer)
-
-    !!! CWP(2022) net diffusivity calculation based on Penney et al. (2020) !!!
-    ! th_mem stores buoyancy from previous time step for calculating time derivative
-    dbdt_int = 0.d0
-    gradb2_int = 0.d0
-
-    do j = 1, Nyp
-      do k = 0, Nzp - 1
-        do i = 0, Nxm1
-          if (gyf(j) > Lyc+Lyp) then
-            dbdt_int = dbdt_int + ((th(i, k, j, n)**2.d0 - th_mem(i, k, j, n)**2.d0) / dt) * (dyf(j) * dx(1) * dz(1))
-            gradb2_int = gradb2_int + (r1(i, k, j)**2.d0 &
-                                       +  r2(i, k, j)**2.d0 &
-                                       + (r3(i, k, j))**2.d0) * (dyf(j) * dx(1) * dz(1))
-          end if
-        end do
-      end do
-    end do
-
-    call mpi_allreduce(mpi_in_place, dbdt_int, 1, mpi_double_precision, &
-                     mpi_sum, mpi_comm_world, ierror)
-    call mpi_allreduce(mpi_in_place, gradb2_int, 1, mpi_double_precision, &
-                     mpi_sum, mpi_comm_world, ierror)
-
-    kappa_net = -0.5d0*dbdt_int/gradb2_int
-
-    fname = 'mean.h5'
-    write (gname,'("kappa", I0.1 "_net")') n
-    call WriteHDF5_real(fname, gname, kappa_net)
-
-    !!! DIFFUSIVE TERM !!!
-    do j = 1, Nyp
-      do k = 0, twoNkz
-        do i = 0, Nxp - 1
-          cs1(i, k, j) = -kx2(i) * crth(i, k, j, n)
-          cs2(i, k, j) = (((crth(i, k, j + 1, n) - crth(i, k, j, n)) / dy(j+1)) - &
-                          ((crth(i, k, j, n) - crth(i, k, j - 1, n)) / dy(j))) / &
-                          dyf(j)
-          cs3(i, k, j) = -kz2(k) * crth(i, k, j, n)
-        end do
-      end do
-    end do
-
-    call fft_xz_to_physical(cs1, s1)
-    call fft_xz_to_physical(cs2, s2)
-    call fft_xz_to_physical(cs3, s3)
-
-    do j = 1, Nyp
-      do k = 0, Nzp - 1
-        do i = 0, Nxm1
-          s4(i, k, j) = (kappa_t(i, k, j, n) + nu/Pr(n)) * (s1(i, k, j) + s2(i, k, j) + s3(i, k, j))  !grad^2 th(n)
-        end do
-      end do
-    end do
-
-    if (movie) then
-  
-      fname = 'movie.h5'
-      call mpi_barrier(mpi_comm_world, ierror)
-      if (rankZ == rankzmovie) then
-        do i = 0, Nxm1
-          do j = 1, Nyp
-            varxy(i, j) = s4(i, NzMovie, j)
-          end do
-        end do
-        write (gname,'("diff_th", I0.1 "_xz")') n
-        call WriteHDF5_XYplane(fname, gname, varxy)
-      end if
-      call mpi_barrier(mpi_comm_world, ierror)
-      if (rankY == rankymovie) then
-        do i = 0, Nxm1
-          do j = 0, Nzp - 1
-            varxz(i, j) = s4(i, j, NyMovie)
-          end do
-        end do
-        write (gname,'("diff_th", I0.1 "_xy")') n
-        call WriteHDF5_XZplane(fname, gname, varxz)
-      end if
-      call mpi_barrier(mpi_comm_world, ierror)
-      do i = 0, Nzp - 1
-        do j = 1, Nyp
-          varzy(i, j) = s4(NxMovie, i, j)
-        end do
-      end do
-      write (gname,'("diff_th", I0.1 "_yz")') n
-      call WriteHDF5_ZYplane(fname, gname, varzy)
-
-    end if
-
-    s1 = th(:,:,:,2)
-    s2 = th(:,:,:,1)
-
-    write (gname,'("td_vel_", I0.1)') n
-    s4 = th_forcing(:,:,:,n)
-    call tracer_density_weighting_general(gname, s2, s1, vd_zmin, LY, weights_vel, s4)
-
-    s1 = abs(th(:,:,:,2))
-    s2 = abs(th(:,:,:,1))
-
-    call tracer_density_entrainment_flux(s2, s1, vd_zmin, LY, weights_flux, s4)
-    if ((rank == 0).and.(n==2)) then
-      fname = 'movie.h5'
-      gname = 'Fphi_boundary'
-      call WriteHDF5_plane(fname, gname, weights_flux)
-
-    end if
-
-    if ((rank == 0).and.(n==2)) then
-      fname = 'movie.h5'
-      gname = 'Ent_phi_flux_rec'
-      call WriteHDF5_plane(fname, gname, Ent_phi_flux)
-      gname = 'Ent_phi_flux_int'
-      call WriteHDF5_plane(fname, gname, Ent_phi_flux_cum)
-
-      Ent_phi_flux_mem = Ent_phi_flux_mem + Ent_phi_flux_cum
-      Ent_phi_flux_cum = 0.d0
-
-      gname = 'boundary_F_int'
-      call WriteHDF5_plane(fname, gname, boundary_F_cum)
-
-      boundary_F_mem = boundary_F_mem + boundary_F_cum
-      boundary_F_cum = 0.d0
-
-    end if
-
-
     !!! RMS TH !!!
     thvar_xy = 0.
     do j = 1, Nyp
@@ -443,8 +294,6 @@ subroutine save_stats_chan(movie,final)
       gname = 'thth_xz'
       call reduce_and_write_XYplane(fname, gname, thvar_xy, .false., movie)
     end if
-
-
 
     !!! TH Reynolds Stress, th*v -- i.e. Buoyancy Production !!!
     uvar_xy = 0.
@@ -483,13 +332,6 @@ subroutine save_stats_chan(movie,final)
       call reduce_and_write_XYplane(fname, gname, vvar_xy, .false., movie)
     end if
 
-    !gname = 'thw_zstar'
-    !call Bin_Ystar_and_Write(gname, f1)
-
-
-
-
-
     !!! TH Mean Production, th_m*v_m (with _full_ buoyancy) !!!
     do j = 1, Nyp
       thsum(j) = 0.
@@ -501,13 +343,10 @@ subroutine save_stats_chan(movie,final)
 
     thv_m(:, n) = thsum / float(Nx)
 
-
-
     !!! Gradient of _Mean_ TH !!!
     do j = 1, Nyp
       dthdy(j, n) = (thme(j, n) - thme(j - 1, n)) / (gyf(j) - gyf(j - 1))
     end do
-
 
     !!! PE Dissipation (Chi!), grad(TH) \cdot grad(TH) !!!
     ! Store |grad b|^2 in r1
@@ -539,120 +378,18 @@ subroutine save_stats_chan(movie,final)
     pe_diss(:, n) = thsum / float(Nx * Nz) ! NOT actually PE dissipation -- just (grad TH)^2
     vvar_xy = vvar_xy / float(Nz)
 
-    ! Write pointwise chi
-
-    do j = 1, Nyp
-      do k = 0, Nzp - 1
-        do i = 0, Nxm1
-          r1(i, k, j) = r1(i, k, j) * ((nu / Pr(n)) + kappa_t(i, k, j, n))
-        end do
-      end do
-    end do
-
-    if (movie) then
-  
-      fname = 'movie.h5'
-      call mpi_barrier(mpi_comm_world, ierror)
-      if (rankZ == rankzmovie) then
-        do i = 0, Nxm1
-          do j = 1, Nyp
-            varxy(i, j) = r1(i, NzMovie, j)
-          end do
-        end do
-        write (gname,'("chi", I0.1 "_xz")') n
-        call WriteHDF5_XYplane(fname, gname, varxy)
-      end if
-      call mpi_barrier(mpi_comm_world, ierror)
-      if (rankY == rankymovie) then
-        do i = 0, Nxm1
-          do j = 0, Nzp - 1
-            varxz(i, j) = r1(i, j, NyMovie)
-          end do
-        end do
-        write (gname,'("chi", I0.1 "_xy")') n
-        call WriteHDF5_XZplane(fname, gname, varxz)
-      end if
-      call mpi_barrier(mpi_comm_world, ierror)
-      do i = 0, Nzp - 1
-        do j = 1, Nyp
-          varzy(i, j) = r1(NxMovie, i, j)
-        end do
-      end do
-      write (gname,'("chi", I0.1 "_yz")') n
-      call WriteHDF5_ZYplane(fname, gname, varzy)
-
-    end if
-
-    call mpi_barrier(mpi_comm_world, ierror)
-    
     if (n == 1) then
-      !!! CWP (2022) joint PDFs !!!
-      ! r2 contains db/dz
-      ! s5 contains epsilon
-      ! s3 contains Ri
-
-      ! compute log Re_b, store in Re_b_field
       ! compute LES corrected TKE, store in tked_field (which currently contains non-corrected TKE)
       do j = 1, Nyp
         do k = 0, Nzp - 1
           do i = 0, Nxm1
-            chi_field(i, k, j) = log10(r1(i, k, j))
             tked_field(i, k, j) = (nu + nu_t(i, k, j)) * tked_field(i, k, j) / nu 
-            Re_b_field(i, k, j) = log10(tked_field(i, k, j) / ((nu + nu_t(i, k, j)) * abs(r2(i, k, j))))
-            if (gyf(j) >= H) then
-              B_field(i, k, j) = (th(i, k, j, n) - N2*(gyf(j)-H)) * u2(i, k, j)
-            else
-              B_field(i, k, j) = th(i, k, j, n) * u2(i, k, j)
-            end if
             
             ! Now that LES-corrected TKE dissipation rate field has been computed, take log
             tked_field(i, k, j) = log10(tked_field(i, k, j))
           end do
         end do
       end do
-
-      ! compute Ri, store in Ri_field. Store u and v gradients in s1, s2.
-      do j = 1, Nyp
-        do k = 0, Nzp - 1
-          do i = 0, Nxm1
-            s1(i, k, j) = (u1(i, k, j) - u1(i, k, j - 1)) / dy(j)
-            s2(i, k, j) = (u3(i, k, j) - u3(i, k, j - 1)) / dy(j)
-            Ri_field(i, k, j) = 2.d0 * r2(i, k, j) / (s1(i, k, j)**2.d0 + s2(i, k, j)**2.d0)
-          end do
-        end do
-      end do
-
-      if (movie) then
-        fname = 'movie.h5'
-        call mpi_barrier(mpi_comm_world, ierror)
-        if (rankZ == rankzmovie) then
-          do j = 1, Nyp
-            do i = 0, Nxm1
-              varxy(i, j) = Ri_field(i, NzMovie, j)
-            end do
-          end do
-          gname = 'Ri_xz'
-          call WriteHDF5_XYplane(fname, gname, varxy)
-        end if
-
-        if (rankY == rankymovie) then
-          do j = 0, Nzp - 1
-            do i = 0, Nxm1
-              varxz(i, j) = Ri_field(i, j, NyMovie)
-            end do
-          end do
-          gname = 'Ri_xy'
-          call WriteHDF5_XZplane(fname, gname, varxz)
-        end if
-
-        do j = 1, Nyp
-          do i = 0, Nzp - 1
-            varzy(i, j) = Ri_field(NxMovie, i, j)
-          end do
-        end do
-        gname = 'Ri_yz'
-        call WriteHDF5_ZYplane(fname, gname, varzy)
-      end if
 
       if (movie) then
         fname = 'movie.h5'
@@ -685,132 +422,7 @@ subroutine save_stats_chan(movie,final)
         gname = 'tked_yz'
         call WriteHDF5_ZYplane(fname, gname, varzy)
       end if
-
-      if (movie) then
-        fname = 'movie.h5'
-        call mpi_barrier(mpi_comm_world, ierror)
-        if (rankZ == rankzmovie) then
-          do j = 1, Nyp
-            do i = 0, Nxm1
-              varxy(i, j) = B_field(i, NzMovie, j)
-            end do
-          end do
-          gname = 'B_xz'
-          call WriteHDF5_XYplane(fname, gname, varxy)
-        end if
-
-        if (rankY == rankymovie) then
-          do j = 0, Nzp - 1
-            do i = 0, Nxm1
-              varxz(i, j) = B_field(i, j, NyMovie)
-            end do
-          end do
-          gname = 'B_xy'
-          call WriteHDF5_XZplane(fname, gname, varxz)
-        end if
-
-        do j = 1, Nyp
-          do i = 0, Nzp - 1
-            varzy(i, j) = B_field(NxMovie, i, j)
-          end do
-        end do
-        gname = 'B_yz'
-        call WriteHDF5_ZYplane(fname, gname, varzy)
-      end if
-
-      if (movie) then
-        fname = 'movie.h5'
-        call mpi_barrier(mpi_comm_world, ierror)
-        if (rankZ == rankzmovie) then
-          do j = 1, Nyp
-            do i = 0, Nxm1
-              varxy(i, j) = N2_field(i, NzMovie, j)
-            end do
-          end do
-          gname = 'N2_xz'
-          call WriteHDF5_XYplane(fname, gname, varxy)
-        end if
-
-        if (rankY == rankymovie) then
-          do j = 0, Nzp - 1
-            do i = 0, Nxm1
-              varxz(i, j) = N2_field(i, j, NyMovie)
-            end do
-          end do
-          gname = 'N2_xy'
-          call WriteHDF5_XZplane(fname, gname, varxz)
-        end if
-
-        do j = 1, Nyp
-          do i = 0, Nzp - 1
-            varzy(i, j) = N2_field(NxMovie, i, j)
-          end do
-        end do
-        gname = 'N2_yz'
-        call WriteHDF5_ZYplane(fname, gname, varzy)
-      end if
-
-      if (movie) then
-        fname = 'movie.h5'
-        call mpi_barrier(mpi_comm_world, ierror)
-        if (rankZ == rankzmovie) then
-          do j = 1, Nyp
-            do i = 0, Nxm1
-              varxy(i, j) = Re_b_field(i, NzMovie, j)
-            end do
-          end do
-          gname = 'Re_b_xz'
-          call WriteHDF5_XYplane(fname, gname, varxy)
-        end if
-
-        if (rankY == rankymovie) then
-          do j = 0, Nzp - 1
-            do i = 0, Nxm1
-              varxz(i, j) = Re_b_field(i, j, NyMovie)
-            end do
-          end do
-          gname = 'Re_b_xy'
-          call WriteHDF5_XZplane(fname, gname, varxz)
-        end if
-
-        do j = 1, Nyp
-          do i = 0, Nzp - 1
-            varzy(i, j) = Re_b_field(NxMovie, i, j)
-          end do
-        end do
-        gname = 'Re_b_yz'
-        call WriteHDF5_ZYplane(fname, gname, varzy)
-      end if
-
-
     end if
-  
-
-    !gname = 'chi_zstar'
-    !call Bin_Ystar_and_Write(gname, r1)
-
-
-    !if (n == 1) then
-      !call compute_BPE
-
-      !!! Compute integrated y*u1 at the left boundary !!!
-      !do j = 1, Nyp
-        !u1y_left(j) = 0.d0
-        !do k = 0, Nzp - 1
-          !u1y_left(j) = u1y_left(j) + gyf(j) * u1(0, k, j)
-        !end do
-      !end do
-      !call mpi_allreduce(mpi_in_place, u1y_left, (Nyp + 2), &
-                         !mpi_double_precision, mpi_sum, mpi_comm_z, ierror)
-
-      !u1y_left = u1y_left / float(Nz)
-      !if (rankZ == 0) then
-        !call integrate_y_var(u1y_left, u1y_left_b)
-      !end if
-
-    !end if
-
-
 
     !!! Write Movie TH Slices !!!
     if (movie) then
@@ -848,44 +460,8 @@ subroutine save_stats_chan(movie,final)
       call WriteHDF5_ZYplane(fname, gname, varzy)
     end if
 
-    if (movie) then
-      if (rank == 0) &
-        write (*, '("Saving Movie Slice Output")')
-
-      fname = 'movie.h5'
-      call mpi_barrier(mpi_comm_world, ierror)
-      if (rankZ == rankzmovie) then
-        do j = 1, Nyp
-          do i = 0, Nxm1
-            varxy(i, j) = th_forcing(i, NzMovie, j, n)
-          end do
-        end do
-        write (gname,'("th_forcing", I0.1 "_xz")') n
-        call WriteHDF5_XYplane(fname, gname, varxy)
-      end if
-
-      if (rankY == rankymovie) then
-        do j = 0, Nzp - 1
-          do i = 0, Nxm1
-            varxz(i, j) = th_forcing(i, j, NyMovie, n)
-          end do
-        end do
-        write (gname,'("th_forcing", I0.1 "_xy")') n
-        call WriteHDF5_XZplane(fname, gname, varxz)
-      end if
-
-      do j = 1, Nyp
-        do i = 0, Nzp - 1
-          varzy(i, j) = th_forcing(NxMovie, i, j, n)
-        end do
-      end do
-      write (gname,'("th_forcing", I0.1 "_yz")') n
-      call WriteHDF5_ZYplane(fname, gname, varzy)
-    end if
-
   end do ! Over passive scalars, n
 
-  
   !!! CWP 2022 azimuthal average calculations !!!
   ! For plume calculations, want variables on GXF, GYF, GZF grid to reduce loss of domain at centreline
 
@@ -1005,119 +581,269 @@ subroutine save_stats_chan(movie,final)
   s1 = b_sfluc * b_sfluc
   call compute_azavg(gname, s1)
 
-  !!! CWP(2022) tracer-density weighted scatter plot based on Penney et al. (2020) !!!
+  !!! Compute nonlinear wave forcing !!!
+  ! xz
+  ! Variables in physical space
 
-  s1 = th(:,:,:,2)
-  s2 = th(:,:,:,1)
-
-  gname = 'td_scatter'
-  call tracer_density_weighting(gname, s2, s1, vd_zmin, LY, weights)
-
-  s1 = abs(th(:,:,:,2))
-  s2 = abs(th(:,:,:,1))
-
-  ! Write out scatter flux and corrected scatter
-  if (rank == 0) then
-    fname = 'movie.h5'
-    gname = 'td_flux'
-    call WriteHDF5_plane(fname, gname, weights_flux_cum) ! write cumulative flux (since last output) to file
-
-    weights_flux_mem = weights_flux_mem + weights_flux_cum ! compute cumulative flux since t = 0
-    weights_flux_cum = 0.d0
-
-    weights = weights - weights_flux_mem ! compute PVD
-    !weights = weights / sum(weights_flux_mem)
-
-    gname = 'pvd'
-    call WriteHDF5_plane(fname, gname, weights) ! write PVD
-
-  end if
-
-  ! Write out PVD bins
-  fname = 'mean.h5'
-  if ((write_bins_flag).and.(rankY == 0)) then
-
-    gname = 'PVD_phibins'
-    DiagPhi = phibins_out(1+rankZ * int(Nphi_out/NprocZ):(rankZ+1) * int(Nphi_out/NprocZ) )
-    call WriteStatH5_X(fname, gname, DiagPhi, int(Nphi_out/NprocZ))
-
-    gname = 'PVD_bbins'
-    DiagB = bbins_out(1+rankZ * int(Nb_out/NprocZ):(rankZ+1) * int(Nb_out/NprocZ) )
-    call WriteStatH5_X(fname, gname, DiagB, int(Nb_out/NprocZ))
-  end if
-
-  ! MPI barrier to ensure above weights calculation has been made. 'weights' constains PVD
-  call mpi_barrier(mpi_comm_world, ierror)
-  
-  ! Communicate PVD to all cores
-  call mpi_bcast(weights, Nb * Nphi, mpi_double_precision, 0, mpi_comm_world, ierror)
-
-
-  pvd_field = -1.d9
-
-  do j = jstart_th(1), jend_th(1)
+  do j = 1, Nyp
     do k = 0, Nzp - 1
       do i = 0, Nxm1
-        bbin = -1
-        phibin = -1
+        r1(i, k, j) = th(i, k, j, 1) - N2 * (gzf(j) - H)
+      end do
+    end do
+    end do
 
-        ! get b index
-        do l = 1, Nb ! b loop
-          if ((th(i, k, j, 1) - bbins(l) > -0.5d0*db).and. &
-                     (th(i, k, j, 1) - bbins(l) <= 0.5d0*db)) then
-            bbin = l
-          end if
-        end do
+  call fft_xz_to_fourier(u1, cu1) ! u1 to FF
+  call fft_xz_to_fourier(u2, cu2) ! u2 to FF
 
-        ! get phi index
-        do m = 1, Nphi !phi loop
-          if ((th(i, k, j, 2) - phibins(m) > -0.5d0*dphi).and.(th(i, k, j, 2) - phibins(m) <= 0.5d0*dphi)) then
-            phibin = m
-          end if
-        end do
-        
-        if ((phibin > 0).and.(bbin > 0)) then
-          pvd_field(i, k, j) = weights(bbin, phibin) ! for output
-        end if
+  ! zeta, stored in s1
+  do j = 1, Nyp
+    do k = 0, twoNkz
+      do i = 0, Nxp - 1
+        cs1(i, k, j) = (cu1(i, k, j + 1) - cu1(i, k, j - 1)) / (2.d0 * dyf(j)) &
+                         - cikx(i) * 0.5d0 * (cu2(i, k, j) + cu2(i, k, j + 1))
       end do
     end do
   end do
 
-  !!! Compute tracer vs. buoyancy distribution !!!
-  
-  ! Compute bins
+  call fft_xz_to_physical(cu1, u1) ! u1 back to PP
+  call fft_xz_to_physical(cu2, u2) ! u2 back to PP
+  call fft_xz_to_physical(cs1, s1) ! zeta in PP
 
-  ! Find z values associated with above buoyancies, assuming linear density profile
-  zmin = H
-  zmax = H + b_max/N2
-  dz_max = maxval(dyf)
-  nbins = ceiling((zmax - zmin)/dz_max)
-  
-  if ((rank == 0).and.(time == 0.d0)) write(*,*) "nbins", nbins
-  nbins_out = int(ceiling(real(nbins)/NprocZ) * NprocZ)
-  allocate(bins(0:nbins_out-1))
-
-  db_pdf = (b_max - b_min)/(nbins-1)
-
-  do i = 0, nbins - 1
-    bins(i) = b_min + i*db_pdf
-  end do
-  
-  do i = nbins, nbins_out - 1 ! Pad the useless part of the array with -1
-    bins(i) = -1.d0
+  !dzeta/dt, stored in s2
+  do j = 1, Nyp
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        s3(i, k, j) = u1(i, k, j) * s1(i, k, j)
+        s4(i, k, j) = 0.5d0 * (u2(i, k, j) + u2(i, k, j + 1)) * s1(i, k, j)
+      end do
+    end do
   end do
 
+  call fft_xz_to_fourier(s3, cs3)
+  call fft_xz_to_fourier(s4, cs4)
+  call fft_xz_to_fourier(r1, cr1)
 
-  s1 = th(:,:,:,2)
-  s2 = th(:,:,:,1)
+  do j = 1, Nyp
+    do k = 0, twoNkz
+      do i = 0, Nxp - 1
+        cs2(i, k, j) = cikx(i) * cr1(i, k, j) - cikx(i) * cs3(i, k, j) &
+                        - (cs4(i, k, j + 1) - cs4(i, k, j - 1)) / (2.d0 * gyf(j))
+      end do
+    end do
+  end do
 
-  !!! CWP (2022) buoyancy binning !!!
+  call fft_xz_to_physical(cr1, r1)
+  call fft_xz_to_physical(cs2, s2) ! dzeta/dt in PP
 
-  gname = 'tb_source'
-  call Compute_PDF_and_Write(gname, s1, s2, bins, vd_zmin - 2 * dz_max, vd_zmin)
+  do j = 1, Nyp
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        s3(i, k, j) = u1(i, k, j) * r1(i, k, j)
+        s4(i, k, j) = 0.5d0 * (u2(i, k, j) + u2(i, k, j + 1)) * r1(i, k, j)
+        s5(i, k, j) = u1(i, k, j) * s2(i, k, j)
+        s6(i, k, j) = 0.5d0 * (u2(i, k, j) + u2(i, k, j + 1)) * s2(i, k, j)
+      end do
+    end do
+  end do
 
-  gname = 'tb_strat'
-  call Compute_PDF_and_Write(gname, s1, s2, bins, vd_zmin, LY)
+  call fft_xz_to_fourier(s3, cs3)
+  call fft_xz_to_fourier(s4, cs4)
+  call fft_xz_to_fourier(s5, cs5)
+  call fft_xz_to_fourier(s6, cs6)
+
+  do j = 1, Nyp
+    do k = 0, twoNkz
+      do i = 0, Nxp - 1
+        cnlwf_xz(i, k, j) = cikx(i) * cs5(i, k, j) - cikx(i) * cikx(i) * cs3(i, k, j) &
+                            + (cs6(i, k, j + 1) - cs6(i, k, j - 1)) / (2.d0 * dyf(j)) &
+                            - cikx(i) * (cs4(i, k, j + 1) - cs4(i, k, j - 1)) / (2.d0 * dyf(j))
+      end do
+    end do
+  end do
+
+  do j = 1, Nyp
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        s3(i, k, j) = u1(i, k, j) * u1(i, k, j) ! uu
+        s4(i, k, j) = u1(i, k, j) * 0.5d0 * (u2(i, k, j) + u2(i, k, j + 1)) ! uv
+        s5(i, k, j) = 0.5d0 * (u2(i, k, j) + u2(i, k, j + 1)) * 0.5d0 * (u2(i, k, j) + u2(i, k, j + 1)) ! vv
+      end do
+    end do
+  end do
+
+  call fft_xz_to_fourier(s3, cs3)
+  call fft_xz_to_fourier(s4, cs4)
+  call fft_xz_to_fourier(s5, cs5)
+  !call fft_xz_to_fourier(p, cp) ! p in FF
+  call fft_xz_to_fourier(r1, cr1)
+ 
+  do j = 1, Nyp
+    do k = 0, twoNkz
+      do i = 0, Nxp - 1
+        cs3(i, k, j) = -cikx(i) * cp(i, k, j) - cikx(i) * cs3(i, k, j) &
+                         - (cs4(i, k, j + 1) - cs4(i, k, j - 1)) / (2.d0 * gyf(j))
+        cs6(i, k, j) = cr1(i, k, j) - (cp(i, k, j + 1) - cp(i, k, j)) / gyf(j) &
+                         - (cs5(i, k, j + 1) - cs5(i, k, j)) / gyf(j) &
+                         - cikx(i) * cs4(i, k, j)
+      end do
+    end do
+  end do
+
+  call fft_xz_to_physical(cr1, r1)
+  !call fft_xz_to_physical(cp, p) ! p back to PP
+  call fft_xz_to_physical(cs6, s6)
+  call fft_xz_to_physical(cs3, s3)
+
+  do j = 1, Nyp
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        s4(i, k, j) = s3(i, k, j) * s1(i, k, j)
+        s5(i, k, j) = s6(i, k, j) * s1(i, k, j)
+      end do
+    end do
+  end do
+
+  call fft_xz_to_fourier(s4, cs4)
+  call fft_xz_to_fourier(s5, cs5)
+
+  do j = 1, Nyp
+    do k = 0, twoNkz
+      do i = 0, Nxp - 1
+        cnlwf_xz(i, k, j) = cnlwf_xz(i, k, j) + cikx(i) * cs4(i, k, j) &
+                            + (cs5(i, k, j + 1) - cs5(i, k, j - 1)) / (2.d0 * gyf(j))
+      end do
+    end do
+  end do
+
+  call fft_xz_to_physical(cnlwf_xz, nlwf_xz)
+
+  ! yz
+  ! Variables in physical space
+
+  call fft_xz_to_fourier(u3, cu3) ! u3 to FF
+  call fft_xz_to_fourier(u2, cu2) ! u2 to FF
+
+  ! zeta, stored in s1
+  do j = 1, Nyp
+    do k = 0, twoNkz
+      do i = 0, Nxp - 1
+        cs1(i, k, j) = cikz(k) * 0.5d0 * (cu2(i, k, j) + cu2(i, k, j + 1)) &
+                        - (cu3(i, k, j + 1) - cu3(i, k, j - 1)) / (2.d0 * dyf(j))
+      end do
+    end do
+  end do
+
+  call fft_xz_to_physical(cu3, u3) ! u3 back to PP
+  call fft_xz_to_physical(cu2, u2) ! u2 back to PP
+  call fft_xz_to_physical(cs1, s1) ! zeta in PP
+
+  !dzeta/dt, stored in s2
+  do j = 1, Nyp
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        s3(i, k, j) = u3(i, k, j) * s1(i, k, j)
+        s4(i, k, j) = 0.5d0 * (u2(i, k, j) + u2(i, k, j + 1)) * s1(i, k, j)
+      end do
+    end do
+  end do
+
+  call fft_xz_to_fourier(s3, cs3)
+  call fft_xz_to_fourier(s4, cs4)
+  call fft_xz_to_fourier(r1, cr1)
+
+  do j = 1, Nyp
+    do k = 0, twoNkz
+      do i = 0, Nxp - 1
+        cs2(i, k, j) = cikz(k) * cr1(i, k, j) - cikz(k) * cs3(i, k, j) &
+                        - (cs4(i, k, j + 1) - cs4(i, k, j - 1)) / (2.d0 * gyf(j))
+      end do
+    end do
+  end do
+
+  call fft_xz_to_physical(cr1, r1)
+  call fft_xz_to_physical(cs2, s2) ! dzeta/dt in PP
+
+  do j = 1, Nyp
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        s3(i, k, j) = u3(i, k, j) * r1(i, k, j) !w * b'
+        s4(i, k, j) = 0.5d0 * (u2(i, k, j) + u2(i, k, j + 1)) * r1(i, k, j) !v * b'
+        s5(i, k, j) = u3(i, k, j) * s2(i, k, j) ! w * zeta_t
+        s6(i, k, j) = 0.5d0 * (u2(i, k, j) + u2(i, k, j + 1)) * s2(i, k, j) ! v * zeta_t
+      end do
+    end do
+  end do
+
+  call fft_xz_to_fourier(s3, cs3)
+  call fft_xz_to_fourier(s4, cs4)
+  call fft_xz_to_fourier(s5, cs5)
+  call fft_xz_to_fourier(s6, cs6)
+
+  do j = 1, Nyp
+    do k = 0, twoNkz
+      do i = 0, Nxp - 1
+        cnlwf_yz(i, k, j) = cikz(k) * cs5(i, k, j) - cikz(k) * cikz(k) * cs3(i, k, j) &
+                            + (cs6(i, k, j + 1) - cs6(i, k, j - 1)) / (2.d0 * dyf(j)) &
+                            - cikz(k) * (cs4(i, k, j + 1) - cs4(i, k, j - 1)) / (2.d0 * dyf(j))
+      end do
+    end do
+  end do
+
+  do j = 1, Nyp
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        s3(i, k, j) = u3(i, k, j) * u3(i, k, j) ! ww
+        s4(i, k, j) = u3(i, k, j) * 0.5d0 * (u2(i, k, j) + u2(i, k, j + 1)) ! vw
+        s5(i, k, j) = 0.5d0 * (u2(i, k, j) + u2(i, k, j + 1)) * 0.5d0 * (u2(i, k, j) + u2(i, k, j + 1)) ! vv
+      end do
+    end do
+  end do
+
+  call fft_xz_to_fourier(s3, cs3)
+  call fft_xz_to_fourier(s4, cs4)
+  call fft_xz_to_fourier(s5, cs5)
+  !call fft_xz_to_fourier(p, cp) ! p in FF
+  call fft_xz_to_fourier(r1, cr1)
+ 
+  do j = 1, Nyp
+    do k = 0, twoNkz
+      do i = 0, Nxp - 1
+        cs3(i, k, j) = -cikz(k) * cp(i, k, j) - cikz(k) * cs3(i, k, j) &
+                         - (cs4(i, k, j + 1) - cs4(i, k, j - 1)) / (2.d0 * gyf(j))
+        cs6(i, k, j) = cr1(i, k, j) - (cp(i, k, j + 1) - cp(i, k, j)) / gyf(j) &
+                         - (cs5(i, k, j + 1) - cs5(i, k, j)) / gyf(j) &
+                         - cikz(k) * cs4(i, k, j)
+      end do
+    end do
+  end do
+
+  !call fft_xz_to_physical(cp, p) ! p back to PP
+  call fft_xz_to_physical(cs6, s6)
+  call fft_xz_to_physical(cs3, s3)
+
+  do j = 1, Nyp
+    do k = 0, Nzp - 1
+      do i = 0, Nxm1
+        s4(i, k, j) = s3(i, k, j) * s1(i, k, j)
+        s5(i, k, j) = s6(i, k, j) * s1(i, k, j)
+      end do
+    end do
+  end do
+
+  call fft_xz_to_fourier(s4, cs4)
+  call fft_xz_to_fourier(s5, cs5)
+
+  do j = 1, Nyp
+    do k = 0, twoNkz
+      do i = 0, Nxp - 1
+        cnlwf_yz(i, k, j) = cnlwf_yz(i, k, j) + cikz(k) * cs4(i, k, j) &
+                            + (cs5(i, k, j + 1) - cs5(i, k, j - 1)) / (2.d0 * gyf(j))
+      end do
+    end do
+  end do
+
+  call fft_xz_to_physical(cnlwf_yz, nlwf_yz)
 
   !!! Write Mean TH Stats f(y) !!!
   fname = 'mean.h5'
@@ -1150,9 +876,6 @@ subroutine save_stats_chan(movie,final)
   end if
   gname = 'u1z_x0'
   call WriteHDF5_real(fname, gname, u1y_left_b)
-
-
-
 
   !!! Write All Movie Slices !!!
   if (movie) then
@@ -1202,6 +925,17 @@ subroutine save_stats_chan(movie,final)
         gname = 'nu_t_xz'
         call WriteHDF5_XYplane(fname, gname, varxy)
       end if
+    end if
+
+    call mpi_barrier(mpi_comm_world, ierror)
+    if (rankZ == rankzmovie) then
+      do j = 1, Nyp
+        do i = 0, Nxm1
+          varxy(i, j) = nlwf_xz(i, NzMovie, j)
+        end do
+      end do
+      write (gname,'("nlwf_xz")')
+      call WriteHDF5_XYplane(fname, gname, varxy)
     end if
 
     call mpi_barrier(mpi_comm_world, ierror)
@@ -1289,6 +1023,13 @@ subroutine save_stats_chan(movie,final)
     end if
 
     call mpi_barrier(mpi_comm_world, ierror)
+    do j = 1, Nyp
+      do i = 0, Nzp - 1
+        varzy(i, j) = nlwf_yz(NxMovie, i, j)
+      end do
+    end do
+    gname = 'nlwf_yz'
+    call WriteHDF5_ZYplane(fname, gname, varzy)
   end if ! END IF MOVIE
 
 

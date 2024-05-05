@@ -49,7 +49,7 @@ program diablo
   use tools
 
   integer i, j, k, n
-  logical flag
+  logical flag, check_th_flag
 
   call init_parameters
   call init_flow
@@ -162,7 +162,7 @@ program diablo
     s3 = u2(:,:,:)
 
     ! Update scatter plot flux weightings
-    call tracer_density_flux(s1, s2, s3, Nymovie, rankymovie, b_phiv_S, phivbins, dphiv)
+    call tracer_density_flux(s1, s2, s3, Nymovie, rankymovie, b_phiv_S, phivbins, dphiv, .True.)
     b_phiv_S_cum = b_phiv_S_cum + b_phiv_S * dt
 
     s2 = th(:,:,:,3)
@@ -173,7 +173,7 @@ program diablo
     Ent_phic_flux_cum = Ent_phic_flux_cum + Ent_phic_flux * dt
 
     ! Update scatter plot flux weightings
-    call tracer_density_flux(s1, s2, s3, Nymovie, rankymovie, b_phic_S, phicbins, dphic)
+    call tracer_density_flux(s1, s2, s3, Nymovie, rankymovie, b_phic_S, phicbins, dphic, .False.)
     b_phic_S_cum = b_phic_S_cum + b_phic_S * dt
 
     ! Store the old scalars in th_mem
@@ -188,6 +188,24 @@ program diablo
     end do
     ! Store dt
     dt_mem = dt
+
+    !DEBUG
+    !if (time_step == 180) then
+      !do j = 1, Nyp
+        !if ((gyf(j) < 0.15d0).and.(gyf(j+1) > 0.15d0)) then
+            !do k = 0, Nzp - 1
+              !do i = 0, Nxm1 
+                !if ((gx(i) == gz(rankZ*Nzp + k)).and.(gx(i) == 0.3d0)) then
+                    !write (*,*) "Adding 0.1 tracer to ", gx(i), gz(rankZ*Nzp+k), gyf(j)
+                    !th(i, k, j, 3) = 1.d-1
+                !end if
+              !end do
+            !end do
+        !end if
+      !end do
+    !end if
+    !DEBUG
+          
 
     do n = 1, N_th
       call fft_xz_to_fourier(th(:,:,:,n), cth(:,:,:,n))

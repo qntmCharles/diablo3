@@ -80,7 +80,7 @@ module parameters
   real(rkind) b_factor, phiv_factor, phic_factor
   real(rkind) phic_min, phic_max, phiv_min, phiv_max, b_min, b_max, db, dphic, dphiv, vd_zmin
 
-  real(rkind) source_vol, vol, flux_volume
+  real(rkind) source_vol, vol, flux_volume_v, flux_volume_c
 
   real(rkind), allocatable :: bbins(:), phicbins(:), phivbins(:)
   real(rkind), allocatable :: bbins_out(:), phicbins_out(:), phivbins_out(:)
@@ -95,7 +95,7 @@ module parameters
   character(len=20) gname
 
   ! Moisture parameters
-  real(rkind) alpha_m, beta_m, tau_m, q0
+  real(rkind) alpha_m, beta_m, tau_m, q0, w_sediment, phic_noise
 
   ! Mixing PDFs
   logical write_bins_flag
@@ -118,7 +118,7 @@ contains
     !   (Note - if you change the following section of code, update the
     !    CURRENT_VERSION number to make obsolete previous input files !)
 
-    current_version = 3.9
+    current_version = 3.12
     read (11, *)
     read (11, *)
     read (11, *)
@@ -251,7 +251,7 @@ contains
     open (11, file='input_chan.dat', form='formatted', status='old')
     ! Read input file.
 
-    current_version = 3.10
+    current_version = 3.12
     read (11, *)
     read (11, *)
     read (11, *)
@@ -308,6 +308,9 @@ contains
       read (11, *) th_BC_Ymax(n), th_BC_Ymax_c1(n)
     end do
 
+    if (rank == 0) write (*,*) alpha_m
+    if ((rank==0).and.(1.d0/alpha_m == 0.d0)) write (*,*) "poop3"
+    
     if (rank == 0) write (*, '("Ro Inverse = " ES26.18)') Ro_inv
     do n = 1, N_th
       if (rank == 0) write (*,*) 'dTHdX', dTHdX(n)
@@ -316,6 +319,12 @@ contains
 
     zvirt = -r0/(1.2d0 * alpha_e)
     F0 = (r0**2.d0) * b0
+
+    ! Settling velocity
+    w_sediment = 0.d0!1.d-2
+
+    ! Set level of noise during initialisation
+    phic_noise = 1.d-6
 
     ! Set up scatter plot arrays
     b_min = 0.d0

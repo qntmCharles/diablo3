@@ -31,38 +31,40 @@
     integer i, j, k, n
 
     ! define variables
-    real(rkind) rnum1, tau_sponge
+    real(rkind) rnum1, F0
     real(rkind) w_m(0 : Ny + 1), r_m(0 : Ny + 1), b_m(0 : Ny + 1)
 
+    F0 = 0.0015d0 * (r0 ** 2.d0) ! passive scalar flux at source
+
     !radius, buoyancy and vertical profiles in vertical
-    do j=2, Nyp+1
-      r_m(j) = 1.2d0 * alpha_e * (gy(j)-zvirt)
-      w_m(j) = (0.9d0 * alpha_e * F0)**(1.d0/3.d0) * &
-                  (gy(j)-zvirt)**(2.d0/3.d0) / r_m(j)
+    do j=1, Nyp
+      r_m(j) = 2.d0 * alpha_e * (gyf(j)-zvirt)
+      w_m(j) = sqrt(M0) / r_m(j)
       b_m(j) = F0 / (r_m(j) * r_m(j) * w_m(j))
     end do
 
-    ! maybe modify forcing timescale if unstable
-    tau_sponge = 2.5d0
+    ! set relaxation timescale. Too large and forcing is too weak, too small and forcing is too strong. 
+    ! recommend testing before running!
+    !tau_sponge = 0.25d0
 
     ! create damping function for vertical velocity
-    do j=2, Nyp
+    do j=1, Nyp
       do k=0, Nzp-1
         do i=0, Nxm1
           call random_number(rnum1)
-          s1(i,k,j) = (u2(i,k,j) - w_m(j) * &
+          s1(i,k,j) = (u2(i,k,j) - 2*w_m(j) * &
             exp(-2.d0*((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp + k)-Lz/2.d0)**2.d0) / &
             (r_m(j)**2.d0)) * &
             (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
-            (1.d0 - tanh((gy(j)-Lyc)/Lyp))/2.d0 &
-            / tau_sponge
+            (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / &
+            tau_sponge
         end do
       end do
     end do
 
     call fft_xz_to_fourier(s1, cs1)
 
-    do j=2, Nyp
+    do j=1, Nyp
       do k=0, twoNkz
         do i=0, Nxp-1
           cf2(i,k,j) = cf2(i,k,j) - cs1(i,k,j)
@@ -71,27 +73,31 @@
     end do
 
     ! create damping function for buoyancy
-    n = 1
-    do j=jstart_th(n), jend_th(n)
-      do k=0, Nzp-1
-        do i=0, Nxm1
-          call random_number(rnum1)
-          s1(i,k,j) = (th(i,k,j,n) - b_m(j) * & 
-            exp(-2.d0*((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0) / &
-            (r_m(j)**2.d0)) * &
-            (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
-            (1.d0 - tanh((gy(j)-Lyc)/Lyp))/2.d0 &
-            / tau_sponge
+    do n = 1, N_th
+      do j=jstart_th(n), jend_th(n)
+        do k=0, Nzp-1
+          do i=0, Nxm1
+            call random_number(rnum1)
+            s1(i,k,j) = (th(i,k,j,n) - 2*b_m(j) * & 
+              exp(-2.d0*((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0) / &
+              (r_m(j)**2.d0)) * &
+              (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
+              (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / & 
+              tau_sponge
+            if (n /= 2) then 
+              s1(i,k,j) = 0.d0 
+            end if
+          end do
         end do
       end do
-    end do
 
-    call fft_xz_to_fourier(s1, cs1)
+      call fft_xz_to_fourier(s1, cs1)
 
-    do j=jstart_th(n), jend_th(n)
-      do k=0, twoNkz
-        do i=0, Nxp-1
-          cfth(i,k,j,n) = cfth(i,k,j,n) - cs1(i,k,j)
+      do j=jstart_th(n), jend_th(n)
+        do k=0, twoNkz
+          do i=0, Nxp-1
+            cfth(i,k,j,n) = cfth(i,k,j,n) - cs1(i,k,j)
+          end do
         end do
       end do
     end do
@@ -122,18 +128,18 @@
          do k = 0, twoNkz
            do i = 0, Nxp - 1
              cf1(i, k, j) = cf1(i, k, j) &
-                            - (dTHdX(n) * (gyf(j) - 0.5d0*Ly) * delta / Ro_inv) &
+                            - (dTHdX(n) * Ri(n) * (gyf(j) - 0.5d0*Ly) * delta / Ro_inv) &
                             * cikz(k) * cu1(i, k, j) &
-                            - (-1.d0 * dTHdZ(n) * (gyf(j) - 0.5d0*Ly) * delta / Ro_inv) &
+                            - (-1.d0 * dTHdZ(n) * Ri(n) * (gyf(j) - 0.5d0*Ly) * delta / Ro_inv) &
                             * cikx(i) * cu1(i, k, j) &
-                            - (-1.d0 * dTHdZ(n) * delta / Ro_inv) &
+                            - (-1.d0 * dTHdZ(n) * Ri(n) * delta / Ro_inv) &
                             * 0.5d0 * (cu2(i, k, j) + cu2(i, k, j + 1))
              cf3(i, k, j) = cf3(i, k, j) &
-                            - (dTHdX(n) * (gyf(j) - 0.5d0*Ly) * delta / Ro_inv) &
+                            - (dTHdX(n) * Ri(n) *  (gyf(j) - 0.5d0*Ly) * delta / Ro_inv) &
                             * cikz(k) * cu3(i, k, j) &
-                            - (-1.d0 * dTHdZ(n) * (gyf(j) - 0.5d0*Ly) * delta / Ro_inv) &
+                            - (-1.d0 * dTHdZ(n) * Ri(n) * (gyf(j) - 0.5d0*Ly) * delta / Ro_inv) &
                             * cikx(i) * cu3(i, k, j) &
-                            - (dTHdX(n) * delta / Ro_inv) &
+                            - (dTHdX(n) * Ri(n) * delta / Ro_inv) &
                             * 0.5d0 * (cu2(i, k, j) + cu2(i, k, j + 1))
            end do
          end do
@@ -143,9 +149,9 @@
          do k = 0, twoNkz
            do i = 0, Nxp - 1
              cf2(i, k, j) = cf2(i, k, j) &
-                            - (dTHdX(n) * (gy(j) - 0.5d0*Ly) * delta / Ro_inv) &
+                            - (dTHdX(n) * Ri(n) * (gy(j) - 0.5d0*Ly) * delta / Ro_inv) &
                             * cikz(k) * cu2(i, k, j) &
-                            - (-1.d0 * dTHdZ(n) * (gy(j) - 0.5d0*Ly) * delta / Ro_inv) &
+                            - (-1.d0 * dTHdZ(n) * Ri(n) * (gy(j) - 0.5d0*Ly) * delta / Ro_inv) &
                             * cikx(i) * cu2(i, k, j)
            end do
          end do
@@ -156,9 +162,9 @@
          do k = 0, twoNkz
            do i = 0, Nxp - 1
              cfth(i, k, j, n) = cfth(i, k, j, n) &
-                                - (delta / Ro_inv) * dTHdX(n) * (gyf(j) - 0.5d0*Ly) &
+                                - (delta / Ro_inv) * dTHdX(n) * Ri(n) * (gyf(j) - 0.5d0*Ly) &
                                 * cikz(k) * cth(i, k, j, n) &
-                                - (delta / Ro_inv) * (-1.d0) * dTHdZ(n) * (gyf(j) - 0.5d0*Ly) &
+                                - (delta / Ro_inv) * (-1.d0) * dTHdZ(n) * Ri(n) * (gyf(j) - 0.5d0*Ly) &
                                 * cikx(i) * cth(i, k, j, n)
            end do
          end do
@@ -170,10 +176,10 @@
    end if
 
    ! Add sponge layer forcing
-   ! do n = 1, N_th
-   !   call sponge_th(n)
-   ! end do
-   ! call sponge_vel
+   !do n = 1, N_th
+     !call sponge_th(n)
+   !end do
+   call sponge_vel
 
    return
  end
@@ -188,7 +194,7 @@
    ! The intention is to allow an open boundary
 
    integer i, j, k, n
-   real(rkind) L_sponge, L_bottom
+   real(rkind) L_sponge, L_top
    real(rkind) sponge_amp
 
    ! The following variables will store the background state
@@ -200,40 +206,51 @@
    real(rkind) sponge_sigma(0:Nyp + 1)
 
    ! Set the amplitude of the sponge
-   sponge_amp = 0.005d0
-   ! Set the top of the sponge layer in physical units
-   L_sponge = -120.d0
-   ! Set the bottom of the computational domain in physical units
-   L_bottom = -140.d0
+   sponge_amp = Sb_amp
+   ! Set the top of the computational domain in physical units
+   L_top = 0.4d0
+   ! Set the bottom of the sponge layer in physical units
+   L_sponge = L_top - S_depth
    do j = 0, Nyp + 1
      ! Quadratic damping at lower wall
-     if (gyf(j) < L_sponge) then
-       sponge_sigma(j) = sponge_amp * ((L_sponge - gyf(j)) &
-                                       / (L_sponge - L_bottom))**2.d0
+     if (gyf(j) > L_sponge) then
+       sponge_sigma(j) = sponge_amp * ((gyf(j) - L_sponge) &
+                                       / (L_top - L_sponge))**2.d0
      else
        sponge_sigma(j) = 0.d0
      end if
    end do
 
    ! Set the profile for relaxing the mean TH
-   do j = 0, Nyp + 1
-     th_0(j) = th_BC_Ymin_c1(n) * gyf(j)
-   end do
-
-   ! For MLI latmix
-   if (n == 1) then
-     th_0(0) = 0.d0
-     do j = 1, Nyp + 1
-       ri_b(j) = 20.d0
-       th_0(j) = th_0(j - 1) &
-                 + dy(j) * ri_b(j) * (dTHdX(n))**2.d0 &
-                 * (delta / Ro_inv)**2.d0
+   if (IC_type >= 10) then
+     do j = 0, Nyp + 1
+       if (gyf(j) < H) then
+         th_0(j) = 0.d0
+       else
+         th_0(j) = N2 * (gyf(j) - H)
+       end if
      end do
    else
      do j = 0, Nyp + 1
-       th_0(j) = 0.d0
+       th_0(j) = th_BC_Ymin_c1(n) * gyf(j)
      end do
    end if
+
+   ! For MLI latmix
+   !if (n == 1) then
+     !th_0(0) = 0.d0
+     !do j = 1, Nyp + 1
+       !ri_b(j) = 20.d0
+       !th_0(j) = th_0(j - 1) &
+                 !+ dy(j) * ri_b(j) * (Ri(n)*dTHdX(n))**2.d0
+                 !+ dy(j) * ri_b(j) * (Ri(n)*dTHdX(n))**2.d0 &
+                 !* (delta / Ro_inv)**2.d0
+     !end do
+   !else
+     !do j = 0, Nyp + 1
+       !th_0(j) = 0.d0
+     !end do
+   !end if
 
    ! Add damping to R-K terms
    ! Damp the perturbations towards 0
@@ -251,7 +268,7 @@
    if (rankZ == 0) then
    do j = jstart_th(n), jend_th(n)
      cfth(0, 0, j, n) = cfth(0, 0, j, n) - sponge_sigma(j) &
-                        * (cth(0, 0, j, n) - th_0(j))
+                        * (cth(0, 0, j, n) - th_0(j)) ! Should th_0 be in fourier space for this??
    end do
    end if
 
@@ -354,7 +371,7 @@ subroutine sponge_vel
 
   integer i, j, k
 
-  real(rkind) L_sponge, L_bottom
+  real(rkind) L_sponge, L_top
   real(rkind) sponge_amp
 
   ! The following variables will store the background state
@@ -364,53 +381,53 @@ subroutine sponge_vel
   real(rkind) sponge_sigma(0:Nyp + 1)
 
   ! Set the amplitude of the sponge
-  sponge_amp = 0.0001d0
-  ! Set the top of the sponge layer in physical units
-  L_sponge = -120.d0
-  ! Set the bottom of the computational domain in physical units
-  L_bottom = -140.d0
+  sponge_amp = Sb_amp
+  ! Set the top of the computational domain in physical units
+  L_top = 0.4d0
+  ! Set the bottom of the sponge layer in physical units
+  L_sponge = L_top - S_depth
   do j = 0, Nyp + 1
-   ! Quadratic damping at lower wall
-   if (gyf(j) < L_sponge) then
-     sponge_sigma(j) = sponge_amp * ((L_sponge - gyf(j)) &
-                                     / (L_sponge - L_bottom))**2.d0
-   else
-     sponge_sigma(j) = 0.d0
-   end if
+    ! Quadratic damping at lower wall
+    if (gyf(j) > L_sponge) then
+      sponge_sigma(j) = sponge_amp * ((gyf(j) - L_sponge) &
+                                     / (L_top - L_sponge))**2.d0
+    else
+      sponge_sigma(j) = 0.d0
+    end if
   end do
 
   ! Set the background state
   ! Here, set the background to be geostrophic, with a linear temperature profile
   do j = 0, Nyp + 1
-   u1_0(j) = 0.d0
-   u3_0(j) = 0.d0
+    u1_0(j) = 0.d0
+    u3_0(j) = 0.d0
   end do
   do j = 0, Nyp + 1
-   u2_0(j) = 0.d0
+    u2_0(j) = 0.d0
   end do
 
   ! Add damping function to explicit R-K
   do k = 0, twoNkz
-   do i = 0, Nxp - 1 ! Nkx
-     if ((i /= 0) .or. (k /= 0)) then
-       do j = jstart, jend
-         cf1(i, k, j) = cf1(i, k, j) - sponge_sigma(j) * (cu1(i, k, j) - 0.d0)
-         cf3(i, k, j) = cf3(i, k, j) - sponge_sigma(j) * (cu3(i, k, j) - 0.d0)
-       end do
-       do j = 1, Nyp
-         cf2(i, k, j) = cf2(i, k, j) - &
+    do i = 0, Nxp - 1 ! Nkx
+      if ((i /= 0) .or. (k /= 0)) then
+        do j = jstart, jend
+          cf1(i, k, j) = cf1(i, k, j) - sponge_sigma(j) * (cu1(i, k, j) - 0.d0)
+          cf3(i, k, j) = cf3(i, k, j) - sponge_sigma(j) * (cu3(i, k, j) - 0.d0)
+        end do
+        do j = 1, Nyp
+          cf2(i, k, j) = cf2(i, k, j) - &
                         0.5 * (sponge_sigma(j) + sponge_sigma(j + 1)) * (cu2(i, k, j) - 0.d0)
-       end do
-     end if
-   end do
+        end do
+      end if
+    end do
   end do
   ! Damp mean flow
   do j = jstart, jend
-   cf1(0, 0, j) = cf1(0, 0, j) - sponge_sigma(j) * (cu1(0, 0, j) - u1_0(j))
-   cf3(0, 0, j) = cf3(0, 0, j) - sponge_sigma(j) * (cu3(0, 0, j) - u3_0(j))
+    cf1(0, 0, j) = cf1(0, 0, j) - sponge_sigma(j) * (cu1(0, 0, j) - u1_0(j))
+    cf3(0, 0, j) = cf3(0, 0, j) - sponge_sigma(j) * (cu3(0, 0, j) - u3_0(j))
   end do
   do j = 1, Nyp
-   cf2(0, 0, j) = cf2(0, 0, j) - sponge_sigma(j) * (cu2(0, 0, j) - u2_0(j))
+    cf2(0, 0, j) = cf2(0, 0, j) - sponge_sigma(j) * (cu2(0, 0, j) - u2_0(j))
   end do
 
   return
@@ -585,11 +602,12 @@ subroutine rk_chan_1
     ! add the buoyancy term as explicit R-K.  Don't add the 0,0 mode in the
     ! y-direction, which corresponds to the plane-average.
     ! The plane averaged density balances the hydrostati! pressure
+
     do j = 2, Nyp
       do k = 1, twoNkz
         do i = 0, Nxp - 1
           ! Use second order interpolation
-          cf2(i, k, j) = cf2(i, k, j) + grav_y * &
+          cf2(i, k, j) = cf2(i, k, j) + Ri(n) * grav_y * &
                          (cth(i, k, j, n) * dyf(j - 1) + &
                           cth(i, k, j - 1, n) * dyf(j)) / (2.d0 * dy(j))
         end do
@@ -601,7 +619,7 @@ subroutine rk_chan_1
         istart = 0
       end if
       do i = istart, Nxp - 1
-        cf2(i, k, j) = cf2(i, k, j) + grav_y * &
+        cf2(i, k, j) = cf2(i, k, j) + Ri(n) * grav_y * &
                        (cth(i, k, j, n) * dyf(j - 1) + &
                         cth(i, k, j - 1, n) * dyf(j)) / (2.d0 * dy(j))
       end do
@@ -610,7 +628,7 @@ subroutine rk_chan_1
     do j = jstart, jend
       do k = 0, twoNkz
         do i = 0, Nxp - 1
-          cf1(i, k, j) = cf1(i, k, j) + grav_x * cth(i, k, j, n)
+          cf1(i, k, j) = cf1(i, k, j) + Ri(n) * grav_x * cth(i, k, j, n)
         end do
       end do
     end do
@@ -618,7 +636,7 @@ subroutine rk_chan_1
     do j = jstart, jend
       do k = 0, twoNkz
         do i = 0, Nxp - 1
-          cf3(i, k, j) = cf3(i, k, j) + grav_z * cth(i, k, j, n)
+            cf3(i, k, j) = cf3(i, k, j) + Ri(n) * grav_z * cth(i, k, j, n)
         end do
       end do
     end do
@@ -888,7 +906,11 @@ subroutine rk_chan_1
 
   ! Optionally, add user forcing to the right hand side
   ! Here, we have U1, U2, U3, and TH in physical space
+
+  !switch off plume forcing at t=10s
+  !if (time < 10.d0) then     
   call user_rhs_chan_physical
+  !end if
 
   ! Finally, Add CFi to CRi
   do j = jstart, jend
@@ -1313,10 +1335,11 @@ subroutine rk_chan_1
     call courant
   end if
 
-  ! Initiate turbulence with a 5% perturbation to velocity in two grid layers
+  ! Initiate turbulence with a % perturbation to velocity in two grid layers
   ! above forcing region
-
-  if (rk_step==3) then
+  
+  if ((turb_type == 0).and. (rk_step==3)) then
+    ! 1% perturbation, 2 layers above forcing
     do k = 0, Nzp-1
       do i = 0, Nxm1 
         if ((gyf(jpert) > Lyc + Lyp) .and. (gyf(jpert-1) < Lyc + Lyp)) then ! check we're in the right place
@@ -1331,7 +1354,44 @@ subroutine rk_chan_1
         end if
       end do
     end do
+  else if ((turb_type == 1).and.(rk_step==3)) then
+    ! 5% perturbation, *up to* 2 layers above forcing
+    do j = 1, Nyp
+      do k = 0, Nzp-1
+        do i = 0, Nxm1 
+          if (gyf(j) < Lyc + Lyp) then
+            call random_number(rnum)
+            u1(i,k,j) = u1(i,k,j)*(1.d0 + 2.d0*(rnum-0.5d0)/20.d0)
+            u2(i,k,j) = u2(i,k,j)*(1.d0 + 2.d0*(rnum-0.5d0)/20.d0)
+            u3(i,k,j) = u3(i,k,j)*(1.d0 + 2.d0*(rnum-0.5d0)/20.d0)
+          else if ((gyf(j) > Lyc + Lyp).and.(gyf(j-1) < Lyc+Lyp)) then
+            call random_number(rnum)
+            u1(i,k,j) = u1(i,k,j)*(1.d0 + 2.d0*(rnum-0.5d0)/20.d0)
+            u2(i,k,j) = u2(i,k,j)*(1.d0 + 2.d0*(rnum-0.5d0)/20.d0)
+            u3(i,k,j) = u3(i,k,j)*(1.d0 + 2.d0*(rnum-0.5d0)/20.d0)
+            call random_number(rnum)
+            u1(i,k,j+1) = u1(i,k,j+1)*(1.d0 + 2.d0*(rnum-0.5d0)/20.d0)
+            u2(i,k,j+1) = u2(i,k,j+1)*(1.d0 + 2.d0*(rnum-0.5d0)/20.d0)
+            u3(i,k,j+1) = u3(i,k,j+1)*(1.d0 + 2.d0*(rnum-0.5d0)/20.d0)
+          end if
+        end do
+      end do
+    end do
   end if
+
+  ! for debugging velocity and buoyancy data
+  !if (rk_step == 3) then 
+    !do i = 0, Nxm1
+      !do k = 0, Nzp - 1
+        !do j = 1, 5
+          !if ((rankY == 0) .and. ((time_step < 5) .and. (rankZ*Nzp+k == Nx/2))) write(*,*) 'WDATA', &
+            !gz(rankZ*Nzp+k), gyf(j), gx(i), u2(i,k,j)
+          !if ((rankY == 0) .and. ((time_step < 5) .and. (rankZ*Nzp+k == Nx/2))) write(*,*) 'BDATA', &
+            !gz(rankZ*Nzp+k), gyf(j), gx(i), th(i,k,j,1) 
+        !end do
+      !end do
+    !end do
+  !end if
 
   ! Transform TH and U to Fourier Space
   call fft_xz_to_fourier(u1, cu1)
@@ -1345,6 +1405,7 @@ subroutine rk_chan_1
   ! The following subroutine projects Uhat onto divergence free space
 
   call rem_div_chan
+
 
   ! Now, phi is stored in CR1, use this to update the pressure field
   ! Note, here we divide by H_BAR since it was absorbed into PHI in REM_DIV
@@ -1630,7 +1691,7 @@ subroutine poisson_p_chan
       do k = 0, twoNkz
         do i = 0, Nxp - 1 ! Nkx
           if ((rankZ /= 0) .or. (i /= 0) .or. (k /= 0)) then
-            cs1(i, k, j) = cs1(i, k, j) + &
+            cs1(i, k, j) = cs1(i, k, j) +  Ri(n) * &
                            (cth(i, k, j + 1, n) - cth(i, k, j - 1, n)) / (gyf(j + 1) - gyf(j - 1))
           end if
         end do

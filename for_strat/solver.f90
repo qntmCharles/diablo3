@@ -51,9 +51,9 @@
       do k=0, Nzp-1
         do i=0, Nxm1
           call random_number(rnum1)
-          s1(i,k,j) = (u2(i,k,j) - 2*w_m(j) * &
-            exp(-((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp + k)-Lz/2.d0)**2.d0) / &
-            (2.d0*r_m(j)**2.d0)) * &
+          s1(i,k,j) = (u2(i,k,j) - 2.d0*w_m(j) * &
+            exp(-2.d0*((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp + k)-Lz/2.d0)**2.d0) / &
+            (r_m(j)**2.d0)) * &
             (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
             (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / &
             tau_sponge
@@ -85,7 +85,7 @@
                 (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / &
                 tau_sponge
             else if ((n == 2).and.(f_type == 8)) then
-              s1(i,k,j) = (th(i,k,j,n) - 2*b_m(j) * &
+              s1(i,k,j) = (th(i,k,j,n) - 2.d0*b_m(j) * &
                 exp(-((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp + k)-Lz/2.d0)**2.d0) / &
                 (2.d0*r_m(j)**2.d0)) * &
                 cos(sqrt((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp + k)-Lz/2.d0)**2.d0)/r_m(j))**2.d0 * &
@@ -93,9 +93,9 @@
                 (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / &
                 tau_sponge
             else
-              s1(i,k,j) = (th(i,k,j,n) - 2*b_m(j) * & 
-                exp(-((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0) / &
-                (2.d0*r_m(j)**2.d0)) * &
+              s1(i,k,j) = (th(i,k,j,n) - 2.d0*b_m(j) * & 
+                exp(-2.d0*((gx(i)-Lx/2.d0)**2.d0 + (gz(rankz*Nzp+k)-Lz/2.d0)**2.d0) / &
+                (r_m(j)**2.d0)) * &
                 (1.d0 + 2.d0*(rnum1-0.5d0)/10.d0)) * &
                 (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / & 
                 tau_sponge
@@ -282,10 +282,12 @@
      end do
    end do
    ! Damp the mean gradient towards TH_0
+   if (rankZ == 0) then
    do j = jstart_th(n), jend_th(n)
      cfth(0, 0, j, n) = cfth(0, 0, j, n) - sponge_sigma(j) &
                         * (cth(0, 0, j, n) - th_0(j)) ! Should th_0 be in fourier space for this??
    end do
+   end if
 
    return
  end
@@ -424,7 +426,7 @@ subroutine sponge_vel
   ! Add damping function to explicit R-K
   do k = 0, twoNkz
     do i = 0, Nxp - 1 ! Nkx
-      if ((i /= 0) .or. (k /= 0)) then
+      if ((rankZ /= 0) .or. (i /= 0) .or. (k /= 0)) then
         do j = jstart, jend
           cf1(i, k, j) = cf1(i, k, j) - sponge_sigma(j) * (cu1(i, k, j) - 0.d0)
           cf3(i, k, j) = cf3(i, k, j) - sponge_sigma(j) * (cu3(i, k, j) - 0.d0)
@@ -437,13 +439,15 @@ subroutine sponge_vel
     end do
   end do
   ! Damp mean flow
-  do j = jstart, jend
-    cf1(0, 0, j) = cf1(0, 0, j) - sponge_sigma(j) * (cu1(0, 0, j) - u1_0(j))
-    cf3(0, 0, j) = cf3(0, 0, j) - sponge_sigma(j) * (cu3(0, 0, j) - u3_0(j))
-  end do
-  do j = 1, Nyp
-    cf2(0, 0, j) = cf2(0, 0, j) - sponge_sigma(j) * (cu2(0, 0, j) - u2_0(j))
-  end do
+  if (rankZ == 0) then
+    do j = jstart, jend
+      cf1(0, 0, j) = cf1(0, 0, j) - sponge_sigma(j) * (cu1(0, 0, j) - u1_0(j))
+      cf3(0, 0, j) = cf3(0, 0, j) - sponge_sigma(j) * (cu3(0, 0, j) - u3_0(j))
+    end do
+    do j = 1, Nyp
+      cf2(0, 0, j) = cf2(0, 0, j) - sponge_sigma(j) * (cu2(0, 0, j) - u2_0(j))
+    end do
+  end if
 
   return
 end
@@ -1437,7 +1441,7 @@ subroutine rk_chan_1
   do j = jstart, jend
     do k = 0, twoNkz
       do i = 0, Nxp - 1
-        cth_forcing(i, k, j, n) = cth_forcing(i, k, j, n) + crth_forcing(i, k, j, n)/temp4 !(crth_forcing(i, k, j, n) / temp5)
+        cth_forcing(i, k, j, n) = cth_forcing(i, k, j, n) + crth_forcing(i, k, j, n)/delta_t !temp4
       end do
     end do
   end do
