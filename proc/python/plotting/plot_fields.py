@@ -15,7 +15,6 @@ params_file = "./params.dat"
 
 # Get dir locations from param file
 base_dir, run_dir, save_dir, version = read_params(params_file)
-
 # Get simulation metadata
 md = get_metadata(run_dir, version)
 
