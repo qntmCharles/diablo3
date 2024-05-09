@@ -120,6 +120,8 @@
       end if
     end do
 
+    call side_sponge_vel
+
     return
  end
 
@@ -196,7 +198,6 @@
    ! Add sponge layer forcing
    !call sponge_th(1)
    call sponge_vel
-   call side_sponge_vel
 
    return
  end
@@ -471,11 +472,11 @@ subroutine side_sponge_vel
   ! Set the amplitude of the sponge
   sponge_amp = Svel_side_amp
   ! Set the top of the computational domain in physical units
-  L_side = LY
+  L_side = LX
   ! Set the bottom of the sponge layer in physical units
   L_sponge_side = L_side - S_side_depth
 
-  do i = 0, Nxp - 1
+  do i = 0, Nxm1
     ! Quadratic damping at lower wall
     if (gxf(i) > L_sponge_side) then
       sponge_sigma(i) = sponge_amp * ((gxf(i) - L_sponge_side) &
@@ -489,29 +490,29 @@ subroutine side_sponge_vel
   end do
 
   ! Add damping function to explicit R-K
-  do k = 0, twoNkz
-    do i = 0, Nxp - 1 ! Nkx
-      if ((rankZ /= 0) .or. (i /= 0) .or. (k /= 0)) then
-        do j = jstart, jend
-          cf1(i, k, j) = cf1(i, k, j) - sponge_sigma(i) * (cu1(i, k, j) - 0.d0)
-          cf3(i, k, j) = cf3(i, k, j) - sponge_sigma(i) * (cu3(i, k, j) - 0.d0)
-        end do
-        do j = 1, Nyp
-          cf2(i, k, j) = cf2(i, k, j) - sponge_sigma(i) * (cu2(i, k, j) - 0.d0)
-        end do
-      end if
+  do j=1, Nyp
+    do k=0, Nzp-1
+      do i=0, Nxm1
+          s1(i, k, j) = - sponge_sigma(i) * (u1(i, k, j) - 0.d0)
+          s2(i, k, j) = - sponge_sigma(i) * (u2(i, k, j) - 0.d0)
+          s3(i, k, j) = - sponge_sigma(i) * (u3(i, k, j) - 0.d0)
+      end do
     end do
   end do
-  ! Damp mean flow
-  if (rankZ == 0) then
-    do j = jstart, jend
-      cf1(0, 0, j) = cf1(0, 0, j) - sponge_sigma(i) * (cu1(0, 0, j) - 0.d0)
-      cf3(0, 0, j) = cf3(0, 0, j) - sponge_sigma(i) * (cu3(0, 0, j) - 0.d0)
+
+  call fft_xz_to_fourier(s1, cs1)
+  call fft_xz_to_fourier(s2, cs2)
+  call fft_xz_to_fourier(s3, cs3)
+
+  do j=1, Nyp
+    do k=0, twoNkz
+      do i=0, Nxp-1
+        cf1(i,k,j) = cf1(i,k,j) + cs1(i,k,j)
+        cf2(i,k,j) = cf2(i,k,j) + cs2(i,k,j)
+        cf3(i,k,j) = cf3(i,k,j) + cs3(i,k,j)
+      end do
     end do
-    do j = 1, Nyp
-      cf2(0, 0, j) = cf2(0, 0, j) - sponge_sigma(i) * (cu2(0, 0, j) - 0.d0)
-    end do
-  end if
+  end do
 
   return
 end
