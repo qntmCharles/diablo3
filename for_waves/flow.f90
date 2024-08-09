@@ -603,7 +603,7 @@ contains
 
 
     integer i, j, k, n
-    real(rkind) ttop, tmid
+    real(rkind) ttop, tmid, bjump
 
     do n = 1, N_th
       if (create_new_th(n)) then
@@ -724,7 +724,7 @@ contains
         end do
         else if (IC_type == 12) then
         ! Linear stratification between H and H + 0.1
-        strat_top = 0.02d0
+        strat_top = 0.05d0
         do k = 0, Nzp - 1
           do i = 0, Nxm1
             do j = 1, Nyp
@@ -736,6 +736,22 @@ contains
                 else
                   th(i, k, j, n) = N2 * strat_top
                 end if
+              else
+                th(i, k, j, n) = 0.d0
+              end if
+            end do
+          end do
+        end do
+        else if (IC_type == 13) then
+        ! Stratification with a buoyancy jump
+        bjump = 0.1d0
+        do k = 0, Nzp - 1
+          do i = 0, Nxm1
+            do j = 1, Nyp
+              if (gyf(j) < H) then
+                th(i, k, j, n) = 0.d0
+              else if (n == 1) then !only want buoyancy to have stratification
+                th(i, k, j, n) = bjump + N2 * (gyf(j) - H)
               else
                 th(i, k, j, n) = 0.d0
               end if

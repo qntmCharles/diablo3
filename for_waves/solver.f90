@@ -109,7 +109,6 @@
 
       call fft_xz_to_fourier(s1, cs1)
 
-      if (((IC_type == 11).and.(n==1)) .or. (IC_type /= 11)) then
       do j=jstart_th(n), jend_th(n)
         do k=0, twoNkz
           do i=0, Nxp-1
@@ -117,7 +116,6 @@
           end do
         end do
       end do
-      end if
     end do
 
     call side_sponge_vel

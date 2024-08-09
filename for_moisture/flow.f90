@@ -679,7 +679,7 @@ contains
 
 
     integer i, j, k, n
-    real(rkind) ttop, tmid, rnum1
+    real(rkind) ttop, tmid, rnum1, phi_vs
 
     do n = 1, N_th
       if (create_new_th(n)) then
@@ -773,15 +773,43 @@ contains
         do k = 0, Nzp - 1
           do i = 0, Nxm1
             do j = 1, Nyp
-              if (n > 1) then
+              if (n == 5) then
+                th(i, k, j, n) = gyf(j)
+              else if (n > 1) then
                 call random_number(rnum1)
                 th(i, k, j, n) = rnum1 * init_noise
+
+                if (((subsat) .or. (supersat)) .and. (n==2)) then
+                  if (gyf(j) < H) then
+                    phi_vs = q0 * exp(alpha_m * (0.d0 - beta_m * gyf(j)))
+                  else
+                    phi_vs = q0 * exp(alpha_m * (N2 * (gyf(j) - H) - beta_m * gyf(j)))
+                  end if
+
+                  if (subsat) then
+                    if (gyf(j) < 0.24d0) then
+                      th(i, k, j, n) = th(i, k, j, n) +  0.8d0 * phi_vs
+                    else if (gyf(j) < 0.32d0) then
+                      th(i, k, j, n) = th(i, k, j, n) + (0.8d0 - 10.d0 * (gyf(j) - 0.24d0)) * phi_vs
+                    end if
+                  end if
+
+                  if (supersat) then
+                    if (gyf(j) < 0.24d0) then
+                      th(i, k, j, n) = th(i, k, j, n) +  1.d0 * phi_vs
+                    else if (gyf(j) < 0.34d0) then
+                      th(i, k, j, n) = th(i, k, j, n) + (1.d0 - 10.d0 * (gyf(j) - 0.24d0)) * phi_vs
+                    end if
+                  end if
+
+
+                end if
               else if (n == 1) then
                 if (gyf(j) < H) then
                   call random_number(rnum1)
                   th(i, k, j, n) = rnum1 * init_noise
                 else
-                  th(i, k, j, n) = N2 * (gyf(j) - H)
+                  th(i, k, j, n) = N2 * (gyf(j) - H) + rnum1 * init_noise
                 end if
               end if
             end do

@@ -23,7 +23,7 @@ subroutine save_stats_chan(movie,final)
   ! Scalar diagnostics
   real(rkind) thsum(0:Nyp + 1)
   real(rkind) thcount(0:Nyp + 1)
-  real(rkind) total_tracer
+  real(rkind) total_tracer, total_vol
   ! Store/write 2D slices
   real(rkind) varxy(0:Nxm1, 1:Nyp), varzy(0:Nzp - 1, 1:Nyp), varxz(0:Nxm1, 0:Nzp - 1)
 
@@ -294,6 +294,35 @@ subroutine save_stats_chan(movie,final)
     fname = 'mean.h5'
     write (gname,'("total_th", I0.1)') n
     call WriteHDF5_real(fname, gname, total_tracer)
+
+    total_tracer = 0.d0
+    total_vol = 0.d0
+    ! Total tracer
+    do j = 1, Nyp
+      do k = 0, Nzp - 1
+        do i = 0, Nxm1
+          if ((th(i,k,j,1) > 0.d0).and.((gyf(j) >= vd_zmin).and.( &
+              ((n==2).and.(th(i,k,j,n) > phiv_min)) .or. ((n==3).and.(th(i,k,j,n) > phic_min)) .or. &
+              ((n==4).and.(th(i,k,j,n) > phip_min))))) then
+            total_tracer = total_tracer + th(i,k,j,n) * dx(1) * dz(1) * dyf(j)
+            total_vol = total_vol + dx(1)*dz(1)*dyf(j)
+          end if
+        end do
+      end do
+    end do
+
+    call mpi_allreduce(mpi_in_place, total_tracer, 1, mpi_double_precision, &
+                     mpi_sum, mpi_comm_world, ierror)
+
+    call mpi_allreduce(mpi_in_place, total_vol, 1, mpi_double_precision, &
+                     mpi_sum, mpi_comm_world, ierror)
+
+    fname = 'mean.h5'
+    write (gname,'("strat_th", I0.1)') n
+    call WriteHDF5_real(fname, gname, total_tracer)
+
+    write (gname,'("vol_strat_th", I0.1)') n
+    call WriteHDF5_real(fname, gname, total_vol)
 
     !!! CWP(2022) net diffusivity calculation based on Penney et al. (2020) !!!
     ! th_mem stores buoyancy from previous time step for calculating time derivative
@@ -1633,7 +1662,7 @@ subroutine compute_W(gname, buoyancy, tracer, zstart, zstop, weights, phibins, d
   end if
 
   fname = 'mean.h5'
-  gname = 'td_scatter_vol'
+  gname = trim(gname) // '_vol'
   call WriteHDF5_real(fname, gname, volume)
 
 end
@@ -1782,13 +1811,8 @@ subroutine tracer_density_cumulative_flux(buoyancy, tracer, zstart, zstop, diff_
   
   diff_sum = 0.d0
 
-  if (dphi < phi_min) then
-    phi1 = phi_min - dphi/2.d0
-    phi2 = phi_min + dphi/2.d0
-  else
-    phi1 = phi_min/2.d0
-    phi2 = 3.d0*phi_min/2.d0
-  end if
+  phi1 = phi_min - dphi/10.d0
+  phi2 = phi_min + dphi/10.d0
 
   do l = 1, Nb
     do j = jstart_th(1), jend_th(1)
@@ -1813,6 +1837,10 @@ subroutine tracer_density_cumulative_flux(buoyancy, tracer, zstart, zstop, diff_
     
   call mpi_allreduce(mpi_in_place, diff_sum, Nb * Nphi, mpi_double_precision, &
                      mpi_sum, mpi_comm_world, ierror)
+
+  do l = 1, Nb
+    diff_sum(l, 3) = (diff_sum(l, 2) - diff_sum(l, 1))/(phi2-phi1)
+  end do
 
 end
 

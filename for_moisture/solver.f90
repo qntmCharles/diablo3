@@ -103,7 +103,7 @@
                 (1.d0 - tanh((gyf(j)-Lyc)/Lyp))/2.d0 / & 
                 tau_sponge
             end if
-            if (n == 3) then 
+            if ((n == 3).or.(n==5)) then 
               s1(i,k,j) = 0.d0 
             end if
           end do
@@ -125,7 +125,7 @@
             do i = 0, Nxm1
               phi_vs = q0 * exp(alpha_m * (th(i, k, j, 1) - beta_m * gyf(j)))
               if ((1.d0/alpha_m /= 0.d0) .and. (max(th(i,k,j,2)-phi_vs, th(i,k,j,3)-init_noise) > 0.d0)) then
-                if ((phi_vs > th(i, k, j, 2)).and.(phi_vs - th(i,k,j,2) > th(i, k, j, 3))) then
+                if ((phi_vs > th(i, k, j, 2)).and.(phi_vs - th(i,k,j,2) > th(i, k, j, 3) * tau_m)) then
                     phi_vs = th(i, k, j, 2) + th(i, k, j, 3) ! not enough condensate to reach saturation
                 end if
 

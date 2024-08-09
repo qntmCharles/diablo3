@@ -56,10 +56,11 @@ contains
       flag = .true.
     end if
 
-    if (((flux_volume_v > 0).or.(flux_volume_c > 0)) .and. (check_flux)) then
+    !if (((flux_volume_v > 0).or.(flux_volume_c > 0)) .and. (check_flux)) then
+    if ((flux_volume_c > 0) .and. (check_flux)) then
       if (rank == 0) &
         write (*, '("STOP because of plume penetration!")')
-      if ((rank == 0) .and. (flux_volume_v > 0)) write(*,*) "Triggered by vapour."
+      !if ((rank == 0) .and. (flux_volume_v > 0)) write(*,*) "Triggered by vapour."
       if ((rank == 0) .and. (flux_volume_c > 0)) write(*,*) "Triggered by condensate."
       if (rank == 0) &
         write (*, *) "Reached time: ", time

@@ -2030,6 +2030,9 @@ subroutine ReadHDF5(fname)
   call h5close_f(Error)
 
   if (variable_dt) then
+    if (reset_time) then
+      time = 0
+    end if
     call courant
   end if
 

@@ -194,7 +194,11 @@ contains
 
     ! Set time limit based on variables in input_chan
     Tb = int(100.d0 * 2.d0*4.*atan(1.0)/sqrt(N2) + 0.5)/100.d0 ! round to 2 decimal places
-    time_limit = (base_time + nb_period)*Tb
+    if (check_flux) then
+      time_limit = 1.d4
+    else
+      time_limit = (base_time + nb_period)*Tb
+    end if
     fine_time = base_time*Tb
     save_stats_dt_fine = save_stats_dt_fine * Tb
     save_stats_dt = save_stats_dt * Tb
@@ -366,6 +370,7 @@ contains
     !!! With current forcing strength, SL interface is pushed upwards!
     if (rank == 0) then
       write (*, *) "vd zmin", vd_zmin
+      write (*, *) b_min, b_max, db, phi_min, phi_max, dphi
     end if
 
     
@@ -398,7 +403,7 @@ contains
     do i = 1, Nb
       bbins(i) = b_min + (i-0.5d0)*db
       bbins_out(i) = b_min + (i-0.5d0)*db
-      !if (rank == 0) write(*,*) "BBIN", i, bbins(i)
+      if (rank == 0) write(*,*) "BBIN", i, bbins(i)
     end do
 
     do i = Nb + 1, Nb_out
@@ -408,7 +413,7 @@ contains
     do i = 1, Nphi
       phibins(i) = phi_min + (i-0.5d0)*dphi
       phibins_out(i) = phi_min + (i-0.5d0)*dphi
-      !if (rank == 0) write(*,*) "PHIBIN", i, phibins(i)
+      if (rank == 0) write(*,*) "PHIBIN", i, phibins(i)
     end do
 
     do i = Nphi + 1, Nphi_out

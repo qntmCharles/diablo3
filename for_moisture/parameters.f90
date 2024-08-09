@@ -74,6 +74,7 @@ module parameters
 
   ! Forcing parameters
   real (rkind) tau_sponge
+  logical subsat, supersat
 
   ! Scatter plot parameters
   integer Nb, Nphi
@@ -273,7 +274,7 @@ contains
     read (11, *)
     read (11, *) les_model_type
     read (11, *)
-    read (11, *) IC_type, kick, physical_noise, init_noise
+    read (11, *) IC_type, kick, physical_noise, init_noise, subsat, supersat
     read (11, *)
     read (11, *) ro
     Ro_inv = 1.d0 / ro
