@@ -9,24 +9,15 @@ module flow
   ! Flow !
 
   ! 3D
-  real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1,s2,s3,s4, s5, &
-                                                           ur, utheta, u_sfluc, v_sfluc, w_sfluc, b_sfluc, &
-                                                           chi_field, Ri_field, Re_b_field, N2_field, &
-                                                           tked_field, pdf_field, pvd_field, B_field
+  real(rkind), pointer, contiguous, dimension(:,:,:) :: u1,u2,u3,p,r1,r2,r3,f1,f2,f3,s1,s2,s3,s4,s5, &
+                                                           ur, utheta, u_sfluc, v_sfluc, w_sfluc, b_sfluc
   complex(rkind), pointer, contiguous, dimension(:,:,:) :: cu1,cu2,cu3,cp,cr1,cr2,cr3,cf1,cf2,cf3, &
-                                                           cs1,cs2,cs3,cs4, cs5, cur, cutheta,  &
-                                                           cu_sfluc, &
-                                                           cv_sfluc, cw_sfluc, cb_sfluc, &
-                                                           cchi_field, cRi_field, cRe_b_field, cN2_field, &
-                                                           ctked_field, cpdf_field, cpvd_field, cB_field
+                                                           cs1,cs2,cs3,cs4, cs5, cur, cutheta, cu_sfluc, &
+                                                           cv_sfluc, cw_sfluc, cb_sfluc
 
   ! 4D
-  real(rkind), pointer, contiguous, dimension(:,:,:,:) :: th,fth,rth, th_mem, th_forcing, ath_forcing, &
-                                                            rth_forcing, mth_forcing, amth_forcing, &
-                                                            sth_forcing, asth_forcing, s6
-  complex(rkind), pointer, contiguous, dimension(:,:,:,:) :: cth,cfth,crth, cth_mem, cth_forcing, &
-                                                            cath_forcing, crth_forcing, cmth_forcing, &
-                                                            camth_forcing, csth_forcing, casth_forcing, cs6
+  real(rkind), pointer, contiguous, dimension(:,:,:,:) :: th,fth,rth
+  complex(rkind), pointer, contiguous, dimension(:,:,:,:) :: cth,cfth,crth
 
 
 
@@ -89,8 +80,6 @@ module flow
   complex(rkind)  cuu1_yx(0:Nyp+1,0:Nxp-1)
 
   real(rkind) epsilon(0:Nyp+1), epsilon_m(0:Nyp+1)
- 
-  real(rkind) dt_mem
 
 
 
@@ -162,16 +151,9 @@ contains
       save_stats_time = save_stats_dt
       save_movie_time = save_movie_dt
       time_step = 0
-      if (.not. duration_flag) then ! Tf is duration from beginning of simulation
-        Tf = Tf - time
-      else if (check_flux) then ! Make Tf arbitrarily large so that plume can reach penetration
-        Tf = 1000.d0
-      end if
       time = 0
 
-      write_bins_flag = .true.
       call save_stats(save_movie_dt/=0,.false.)
-      write_bins_flag = .false.
       if (use_LES) call save_stats_LES_OOL(.true.)
     end if
 
@@ -218,27 +200,10 @@ contains
     call alloc_array3D(w_sfluc,cw_sfluc)
     call alloc_array3D(b_sfluc,cb_sfluc)
 
-    call alloc_array3D(chi_field,cchi_field)
-    call alloc_array3D(Ri_field,cRi_field)
-    call alloc_array3D(Re_b_field,cRe_b_field)
-    call alloc_array3D(tked_field,ctked_field)
-    call alloc_array3D(N2_field,cN2_field)
-    call alloc_array3D(pdf_field,cpdf_field)
-    call alloc_array3D(pvd_field,cpvd_field)
-    call alloc_array3D(B_field,cB_field)
 
     call alloc_array4D(th, cth)   ! Not using the same memory!
     call alloc_array4D(fth,cfth)
     call alloc_array4D(rth,crth)
-    call alloc_array4D(th_mem,cth_mem)
-    call alloc_array4D(th_forcing,cth_forcing)
-    call alloc_array4D(ath_forcing,cath_forcing)
-    call alloc_array4D(rth_forcing,crth_forcing)
-    call alloc_array4D(mth_forcing,cmth_forcing)
-    call alloc_array4D(amth_forcing,camth_forcing)
-    call alloc_array4D(sth_forcing,csth_forcing)
-    call alloc_array4D(asth_forcing,casth_forcing)
-    call alloc_array4D(s6, cs6)
 
   end
 
@@ -375,7 +340,7 @@ contains
           end do
         end do
       end do
-    else if (IC_type == 4 .or. IC_type == 9) then
+    else if (IC_type == 4 .or. IC_type >= 9) then
       ! Infinite Front
       do j = 0, Nyp
         do k = 0, Nzp - 1
@@ -443,86 +408,6 @@ contains
             u1(i, k, j) = 0.d0
             u2(i, k, j) = 0.d0
             u3(i, k, j) = -2.d0 * delta / Lx * (gyf(j) - 0.5 * Ly) ! Remove the TWS from solver
-          end do
-        end do
-      end do
-    else if (IC_type == 10) then
-      ! Shear in stratified layer
-      if (shear_type == 1) then
-        if (rank == 0) write(*,*) "Setting stepped parabolic shear as initial condition."
-        do j = 0, Nyp
-          do k = 0, Nzp - 1
-            do i = 0, Nxm1
-              if ((gyf(j) > H).and.(gyf(j) < smax_height)) then
-                u1(i,k,j) = srate * (gyf(j) - H)
-              else if (gyf(j) > smax_height) then
-                u1(i,k,j) = -srate*(1/(szero_height-smax_height) + &
-                        (szero_height - H)/(szero_height - smax_height)**2.d0) * (gyf(j) - smax_height)**2.d0 + &
-                        srate * (gyf(j) - smax_height) + srate*(smax_height - H)
-              else
-                u1(i, k, j) = 0.d0
-              end if
-              u2(i, k, j) = 0.d0
-              u3(i, k, j) = 0.d0
-            end do
-          end do
-        end do
-      else if (shear_type == 2) then
-        if (rank == 0) write(*,*) "Setting parabolic shear as initial condition."
-        do j = 0, Nyp
-          do k = 0, Nzp - 1
-            do i = 0, Nxm1
-              if (gyf(j) > H) then
-                u1(i, k, j) = -1.d0 * (srate/(Ly-H)) * (gyf(j) - H) * (gyf(j) - Ly)
-              else
-                u1(i, k, j) = 0.d0
-              end if
-              u2(i, k, j) = 0.d0
-              u3(i, k, j) = 0.d0
-            end do
-          end do
-        end do
-      else if (shear_type == 3) then
-        if (rank == 0) write(*,*) "Setting stepped linear shear as initial condition."
-        do j = 0, Nyp+1
-          do k = 0, Nzp - 1
-            do i = 0, Nxm1
-              if ((gyf(j) > H).and.(gyf(j) < smax_height)) then
-                u1(i, k, j) = srate * (gyf(j) - H)
-              else if (gyf(j) > smax_height) then
-                u1(i, k, j) = srate * (smax_height - H)
-              else
-                u1(i, k, j) = 0.d0
-              end if
-              u2(i, k, j) = 0.d0
-              u3(i, k, j) = 0.d0
-            end do
-          end do
-        end do
-      else if (shear_type == 4) then
-        if (rank == 0) write(*,*) "Setting linear shear as initial condition."
-        do j = 0, Nyp+1
-          do k = 0, Nzp - 1
-            do i = 0, Nxm1
-              if (gyf(j) > H) then
-                u1(i, k, j) = srate * (gyf(j) - H)
-              else
-                u1(i, k, j) = 0.d0
-              end if
-              u2(i, k, j) = 0.d0
-              u3(i, k, j) = 0.d0
-            end do
-          end do
-        end do
-      end if
-    else if (IC_type >= 11) then
-      ! Quiescent
-      do j = 0, Nyp
-        do k = 0, Nzp - 1
-          do i = 0, Nxm1
-            u1(i, k, j) = 0.d0
-            u2(i, k, j) = 0.d0
-            u3(i, k, j) = 0.d0
           end do
         end do
       end do
@@ -694,7 +579,6 @@ contains
 
 
     integer i, j, k, n
-    real(rkind) ttop, tmid, rnum1, phi_vs
 
     do n = 1, N_th
       if (create_new_th(n)) then
@@ -774,63 +658,12 @@ contains
               end do
             end do
           end do
-        else if (IC_type == 9) then
+        else if (IC_TYPE >= 9) then
         ! Quiescent IC
         do k = 0, Nzp - 1
           do i = 0, Nxm1
             do j = 1, Nyp
               th(i, k, j, n) = 0.d0
-            end do
-          end do
-        end do
-        else if (IC_type >= 10) then
-        ! Linear stably stratified layer, random noise applied to all fields
-        do k = 0, Nzp - 1
-          do i = 0, Nxm1
-            do j = 1, Nyp
-              if (n == 5) then
-                th(i, k, j, n) = gyf(j)
-              else if (n > 1) then
-                call random_number(rnum1)
-                th(i, k, j, n) = rnum1 * init_noise
-
-                if (((subsat) .or. (supersat)) .and. (n==2)) then
-                  if (gyf(j) < H) then
-                    phi_vs = q0 * exp(alpha_m * (0.d0 - beta_m * gyf(j)))
-                  else
-                    phi_vs = q0 * exp(alpha_m * (N2 * (gyf(j) - H) - beta_m * gyf(j)))
-                  end if
-
-                  if (subsat) then
-                    !if (gyf(j) < 0.24d0) then
-                      !th(i, k, j, n) = th(i, k, j, n) +  0.8d0 * phi_vs
-                    !else if (gyf(j) < 0.32d0) then
-                      !th(i, k, j, n) = th(i, k, j, n) + (0.8d0 - 10.d0 * (gyf(j) - 0.24d0)) * phi_vs
-                    !end if
-                    th(i, k, j, n) = th(i, k, j, n) + phi_vs * 0.8d0 * 0.5d0 * &
-                        (1.d0 - tanh(40.d0*(gyf(j) - 0.3d0)))
-                  end if
-
-                  if (supersat) then
-                    !if (gyf(j) < 0.24d0) then
-                      !th(i, k, j, n) = th(i, k, j, n) +  1.d0 * phi_vs
-                    !else if (gyf(j) < 0.34d0) then
-                      !th(i, k, j, n) = th(i, k, j, n) + (1.d0 - 10.d0 * (gyf(j) - 0.24d0)) * phi_vs
-                    !end if
-                    th(i, k, j, n) = th(i, k, j, n) + phi_vs * 1.d0 * 0.5d0 * &
-                        (1.d0 - tanh(40.d0*(gyf(j) - 0.32d0)))
-                  end if
-
-
-                end if
-              else if (n == 1) then
-                call random_number(rnum1)
-                if (gyf(j) < H) then
-                  th(i, k, j, n) = rnum1 * init_noise
-                else
-                  th(i, k, j, n) = N2 * (gyf(j) - H) + rnum1 * init_noise
-                end if
-              end if
             end do
           end do
         end do
@@ -856,9 +689,7 @@ contains
     !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 
     character(len=55) fname
-    character(len=20) gname
     integer i, j, k, n
-    real(rkind) DiagB(1:int(Nb_out/NprocZ))
 
     fname = 'start.h5'
     if (rank == 0) &
@@ -866,35 +697,6 @@ contains
 
     call mpi_barrier(mpi_comm_world, ierror)
     call ReadHDF5(fname)
-
-    if (rank == 0) then
-      gname = 'b_phiv_S_mem'
-      call ReadHDF5_plane(fname, gname, b_phiv_S_mem)
-      gname = 'b_phiv_S_cum'
-      call ReadHDF5_plane(fname, gname, b_phiv_S_cum)
-      gname = 'Ent_phiv_flux_mem'
-      call ReadHDF5_plane(fname, gname, Ent_phiv_flux_mem)
-      gname = 'Ent_phiv_flux_cum'
-      call ReadHDF5_plane(fname, gname, Ent_phiv_flux_cum)
-
-      gname = 'b_phic_S_mem'
-      call ReadHDF5_plane(fname, gname, b_phic_S_mem)
-      gname = 'b_phic_S_cum'
-      call ReadHDF5_plane(fname, gname, b_phic_S_cum)
-      gname = 'Ent_phic_flux_mem'
-      call ReadHDF5_plane(fname, gname, Ent_phic_flux_mem)
-      gname = 'Ent_phic_flux_cum'
-      call ReadHDF5_plane(fname, gname, Ent_phic_flux_cum)
-
-      gname = 'b_phip_S_mem'
-      call ReadHDF5_plane(fname, gname, b_phip_S_mem)
-      gname = 'b_phip_S_cum'
-      call ReadHDF5_plane(fname, gname, b_phip_S_cum)
-      gname = 'Ent_phip_flux_mem'
-      call ReadHDF5_plane(fname, gname, Ent_phip_flux_mem)
-      gname = 'Ent_phip_flux_cum'
-      call ReadHDF5_plane(fname, gname, Ent_phip_flux_cum)
-    end if
 
     ! Apply initial boundary conditions, set ghost cells
     call apply_BC_vel_mpi_post
@@ -908,11 +710,9 @@ contains
     !----*|--.---------.---------.---------.---------.---------.---------.-|-------|
 
     character(len=55) fname
-    character(len=20) gname
     integer i, j, k, n
     logical final, save_pressure
     real(rkind) wall_begin
-    real(rkind) DiagB(1:int(Nb_out/NprocZ))
 
     call wall_time(wall_begin)
 
@@ -934,35 +734,6 @@ contains
     end if
     call mpi_barrier(mpi_comm_world, ierror)
     call WriteHDF5(fname, save_pressure)
-
-    if (rank == 0) then
-      gname = 'b_phiv_S_mem'
-      call WriteHDF5_plane(fname, gname, b_phiv_S_mem)
-      gname = 'b_phiv_S_cum'
-      call WriteHDF5_plane(fname, gname, b_phiv_S_cum)
-      gname = 'Ent_phiv_flux_cum'
-      call WriteHDF5_plane(fname, gname, Ent_phiv_flux_cum)
-      gname = 'Ent_phiv_flux_mem'
-      call WriteHDF5_plane(fname, gname, Ent_phiv_flux_mem)
-
-      gname = 'b_phic_S_mem'
-      call WriteHDF5_plane(fname, gname, b_phic_S_mem)
-      gname = 'b_phic_S_cum'
-      call WriteHDF5_plane(fname, gname, b_phic_S_cum)
-      gname = 'Ent_phic_flux_cum'
-      call WriteHDF5_plane(fname, gname, Ent_phic_flux_cum)
-      gname = 'Ent_phic_flux_mem'
-      call WriteHDF5_plane(fname, gname, Ent_phic_flux_mem)
-
-      gname = 'b_phip_S_mem'
-      call WriteHDF5_plane(fname, gname, b_phip_S_mem)
-      gname = 'b_phip_S_cum'
-      call WriteHDF5_plane(fname, gname, b_phip_S_cum)
-      gname = 'Ent_phip_flux_cum'
-      call WriteHDF5_plane(fname, gname, Ent_phip_flux_cum)
-      gname = 'Ent_phip_flux_mem'
-      call WriteHDF5_plane(fname, gname, Ent_phip_flux_mem)
-    end if
 
     call wall_time(end_wall_time)
     if (rank == 0) &
@@ -999,17 +770,10 @@ subroutine courant
   ! The subroutine should be called with the velocity in physical space
 
   real(rkind) dt_x, dt_y, dt_z
-  real(rkind) dt_sat, CFLsat, phi_vs, eps_sat
   real(rkind) Nmax
   integer i, j, k, n
   integer imin, jmin, kmin
   real(rkind) r_max ! Maximum fractional change in dt
-  real(rkind) nu_t_max, kappa_t_max(1:N_th)
-
-
-  ! Set CFL number for saturation adjustment
-  CFLsat = 0.1d0
-  eps_sat = 1.d-3
 
   ! Set the initial dt to some arbitrary large number
   dt = 1.d0
@@ -1019,29 +783,14 @@ subroutine courant
   do n = 1, N_th
     dt = min(dt, dt * nu / (nu / Pr(n)))
   end do
-  ! Make sure that turbulent viscosity and diffusivity are captured
-  !if (use_LES .and. (time_step > LES_start)) then
-    !nu_t_max = maxval(nu_t)
-    !call get_maximum_mpi(nu_t_max)
-    !dt = min(dt, 0.5d0 * min(dx(1), dz(1))**(2.d0 * beta) / nu_t_max)
-    !!write(*,*) "nu", nu_t_max
-    !do n = 1, N_th
-      !kappa_t_max(n) = maxval(kappa_t(:,:,:,n))
-      !call get_maximum_mpi(kappa_t_max(n))
-      !dt = min(dt, dt * nu / kappa_t_max(n))
-      !!write(*,*) "kappa", kappa_t_max(n)
-    !end do
-  !end if
   ! Make sure that we capture the inertial period (for rotating flows)
   if (Ro_inv /= 0.d0) then
     dt = min(dt, 2.d0 * pi / abs((Ro_inv / delta)) / 20.d0)
   end if
   ! Make sure that we capture the buoyancy period (for stratified flows)
   do n = 1, N_th
-    if (Ri(n) /= 0.d0) then
-    Nmax = sqrt(abs(Ri(n)*th_BC_Ymax_c1(n)))
+    Nmax = sqrt(abs(th_BC_Ymax_c1(n)))
     dt = min(dt, 0.1 * 2.d0 * pi / Nmax)
-    end if
   end do
 
   ! Make sure we capture the Geostrophic Flow-through time
@@ -1056,10 +805,10 @@ subroutine courant
       do j = jstart, jend
         do k = 0, Nzp - 1
           do i = 0, Nxm1
-            dt_x = CFL * dx(i) / abs(u1(i, k, j) - dTHdZ(n) * Ri(n) &
+            dt_x = CFL * dx(i) / abs(u1(i, k, j) - dTHdZ(n) &
                                      * gyf(j) / (Ro_inv / delta))
             dt_y = CFL * dy(j) / abs(u2(i, k, j))
-            dt_z = CFL * dz(k) / abs(u3(i, k, j) + (Ri(n) / (Ro_inv / delta)) &
+            dt_z = CFL * dz(k) / abs(u3(i, k, j) + (1.d0 / (Ro_inv / delta)) &
                                      * dTHdX(n) * (gyf(j) - 0.5d0*Ly))
             dt = min(dt, dt_x, dt_y, dt_z)
           end do
@@ -1071,20 +820,9 @@ subroutine courant
       do k = 0, Nzp - 1
         do i = 0, Nxm1
           dt_x = CFL * dx(i) / abs(u1(i, k, j))
-          dt_y = CFL * dy(j) / abs(u2(i, k, j)-w_sediment)
+          dt_y = CFL * dy(j) / abs(u2(i, k, j))
           dt_z = CFL * dz(k) / abs(u3(i, k, j))
-
-          phi_vs = q0 * exp(alpha_m * (th(i, k, j, 1) - beta_m * gyf(j)))
-          if (th(i, k, j, 2) > phi_vs) then
-            dt_sat = CFLsat * abs((th(i, k, j, 2)*tau_m)/(th(i, k, j, 2) - phi_vs)) ! phi_v adjustment
-
-            !dt_sat = min(dt_sat, &
-                !CFLsat * abs(((eps_sat + th(i, k, j, 3))*tau_m)/(th(i, k, j, 2) - phi_vs)))   ! phi_c adjustment
-
-            dt = min(dt, dt_x, dt_y, dt_z, dt_sat)
-          else
-            dt = min(dt, dt_x, dt_y, dt_z)
-          end if
+          dt = min(dt, dt_x, dt_y, dt_z)
         end do
       end do
     end do
@@ -1119,7 +857,7 @@ subroutine courant
   else
     delta_t = dt
   end if
-  
+
   if (rank == 0) write (*,*) "dt", delta_t
   if (rank == 0) write (*,*) "nu", nu
 

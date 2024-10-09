@@ -272,8 +272,7 @@
    ! Damp the perturbations towards 0
    do k = 0, twoNkz
      do i = 0, Nxp - 1
-       !if ((rankZ /= 0) .or. (i /= 0) .or. (k /= 0)) then
-       if ((i /= 0) .or. (k /= 0)) then
+       if ((rankZ /= 0) .or. (i /= 0) .or. (k /= 0)) then
          do j = jstart_th(n), jend_th(n)
            cfth(i, k, j, n) = cfth(i, k, j, n) &
                               - sponge_sigma(j) * (cth(i, k, j, n) - 0.)
